@@ -34,7 +34,7 @@ func NewVLexer() *VLexer {
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^else`), "else")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^assign`), "assign")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^initial`), "initial")
-	vlexer.AddMappingNoCapture(regexp.MustCompile(`^(negedge)|(posedge)`), "time")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((negedge)|(posedge))`), "time")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^default`), "default")
 	// comparisons/assignments
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\=\=)|(\!\=)|(\<\=)|(>\=)|\>|\<|(\=\=\=)|(\!\-\=))`), "comparator")
@@ -56,6 +56,13 @@ func NewVLexer() *VLexer {
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\=+`), "equal")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\~`), "tilde")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\#`), "pound")
+	// other
+	vlexer.AddMappingNoCapture(regexp.MustCompile("^`include.+"), "include")
+	vlexer.AddMappingNoCapture(regexp.MustCompile("^`define"), "define")
+	vlexer.AddMappingNoCapture(regexp.MustCompile("^`timescale"), "timescale")
+	vlexer.AddMapping(regexp.MustCompile(`^\$.*`), func(code string) (Token, error) {
+		return Token{Type: "unknown", Value: code}, nil
+	})
 	// variable-related
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((reg)|(wire)|(genvar)|(parameter)|(input)|(output)|(defparam))`), "type")
 	vlexer.AddMapping(regexp.MustCompile("^`?[A-Za-z][a-zA-Z0-9_]*"), func(code string) (Token, error) {
@@ -75,12 +82,6 @@ func NewVLexer() *VLexer {
 			return Token{}, errors.New(err)
 		}
 		return Token{Type: "number", Value: matches[re.SubexpIndex("LITERAL")]}, nil
-	})
-
-	// other
-	vlexer.AddMappingNoCapture(regexp.MustCompile("^`include.+"), "include")
-	vlexer.AddMapping(regexp.MustCompile(`^\$.*`), func(code string) (Token, error) {
-		return Token{Type: "unknown", Value: code}, nil
 	})
 
 	return vlexer

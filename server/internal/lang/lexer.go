@@ -12,12 +12,14 @@ type Token struct {
 }
 
 type Lexer struct {
-	mappings map[*regexp.Regexp]func(string) (Token, error)
+	regexps []*regexp.Regexp
+	funcs   []func(string) (Token, error)
 }
 
 func NewLexer() *Lexer {
 	return &Lexer{
-		mappings: map[*regexp.Regexp]func(string) (Token, error){},
+		regexps: []*regexp.Regexp{},
+		funcs:   []func(string) (Token, error){},
 	}
 }
 
@@ -25,7 +27,8 @@ func NewLexer() *Lexer {
 // the pattern should probably start with a ^ to indicate
 // the start of the string
 func (l *Lexer) AddMapping(pattern *regexp.Regexp, mapper func(string) (Token, error)) {
-	l.mappings[pattern] = mapper
+	l.regexps = append(l.regexps, pattern)
+	l.funcs = append(l.funcs, mapper)
 }
 
 // helper to make adding a mapping easier when you don't need to capture
@@ -37,9 +40,8 @@ func (l *Lexer) AddMappingNoCapture(pattern *regexp.Regexp, Type string) {
 }
 
 func (l *Lexer) Lex(code string) []Token {
-	i := 0
 	tokens := []Token{}
-	for i < len(code) {
+	for i := 0; i < len(code); {
 		// figure out which of the tokens will consume
 		// the most characters, and match that token
 		// with the code
@@ -47,11 +49,13 @@ func (l *Lexer) Lex(code string) []Token {
 		f := func(_ string) (Token, error) {
 			return Token{}, errors.New("no token found")
 		}
-		for pattern, mapping := range l.mappings {
-			length := len(pattern.FindString(code[i:]))
+
+		// enforce order of precedence (mappings inserted first take precedence)
+		for j := 0; j < len(l.funcs); j++ {
+			length := len(l.regexps[j].FindString(code[i:]))
 			if length > maxLength {
 				maxLength = length
-				f = mapping
+				f = l.funcs[j]
 			}
 		}
 
