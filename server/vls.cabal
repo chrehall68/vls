@@ -70,8 +70,8 @@ executable vls
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base ^>=4.17.2.1, array
-    build-tool-depends: alex:alex, happy:happy
+    build-depends:    base ^>=4.17.2.1, array, text, lsp ^>=2.7
+    build-tool-depends: alex:alex, happy:happy ^>= 2.1.2
 
     -- Directories containing source files.
     hs-source-dirs:   app
