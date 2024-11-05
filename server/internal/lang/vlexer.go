@@ -17,7 +17,8 @@ func NewVLexer() *VLexer {
 
 	// add mappings
 	// whitespace
-	vlexer.AddMappingNoCapture(regexp.MustCompile(`^[\s\r\n\t]+`), "whitespace")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^[\t ]+`), "whitespace")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^[\r\n]+`), "newline")
 	// comments
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\/\/.*`), "comment")
 	// keywords
@@ -72,7 +73,7 @@ func NewVLexer() *VLexer {
 			fmt.Println("failed to parse identifier on ", code)
 			return Token{}, errors.New("failed to parse identifier")
 		}
-		return Token{Type: "variable", Value: matches[re.SubexpIndex("IDENTIFIER")]}, nil
+		return Token{Type: "identifier", Value: matches[re.SubexpIndex("IDENTIFIER")]}, nil
 	})
 	vlexer.AddMapping(regexp.MustCompile(`^(([0-9]+)|([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|(\"[^\s]*\"))`), func(code string) (Token, error) {
 		re := regexp.MustCompile(`^(?P<LITERAL>(([0-9]+)|([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|(\"[^\s]*\")))`)
@@ -81,7 +82,7 @@ func NewVLexer() *VLexer {
 			err := fmt.Sprintln("failed to parse literal on ", code)
 			return Token{}, errors.New(err)
 		}
-		return Token{Type: "number", Value: matches[re.SubexpIndex("LITERAL")]}, nil
+		return Token{Type: "literal", Value: matches[re.SubexpIndex("LITERAL")]}, nil
 	})
 
 	return vlexer

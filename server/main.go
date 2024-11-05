@@ -59,11 +59,12 @@ func main() {
 		}
 	}
 
-	// now, we need to set up our
+	// now, let's parse and print out results
+	fmt.Println("Done lexing")
+	parser := lang.NewParser()
 	for file, tokens := range fileToTokensMap {
-		fmt.Println(file)
-		for _, token := range tokens {
-			fmt.Println(token.Type, token.Value)
-		}
+		results := parser.Parse(tokens)
+		fmt.Println("Parse results for file: ", file)
+		fmt.Println(results)
 	}
 }
