@@ -22,7 +22,20 @@ export function activate(_: ExtensionContext) {
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
     // Register the server for plain text documents
-    documentSelector: [{ scheme: "file", language: "plaintext" }],
+    documentSelector: [
+      {
+        language: "go",
+        scheme: "file",
+      },
+      {
+        language: "plaintext",
+        scheme: "file",
+      },
+      {
+        language: "verilog",
+        scheme: "file",
+      },
+    ],
     synchronize: {
       // Notify the server about file changes to '.clientrc files contained in the workspace
       fileEvents: workspace.createFileSystemWatcher("**/.clientrc"),
@@ -38,6 +51,7 @@ export function activate(_: ExtensionContext) {
   );
 
   // Start the client. This will also launch the server
+  console.log("Starting client");
   client.start();
 }
 
