@@ -11,9 +11,10 @@ import (
 
 type ServerState struct {
 	workspace string
-	modules   []lang.Module     // list of all modules
-	defines   []string          // list of all defines
-	symbolMap map[string]string // map of symbol names to their full path
+	modules   map[string][]lang.Module     // list of all modules, grouped by file (w/o the file://)
+	defines   map[string][]lang.Define     // list of all defines, grouped by file (w/o the file://)
+	symbolMap map[string]protocol.Location // map of symbol names to their location (path w/ the file://)
+	files     map[string]*File             // map of file names (w/o the file://) to corresponding File objects
 	log       *zap.Logger
 }
 
@@ -32,7 +33,14 @@ func NewHandler(ctx context.Context, server protocol.Server, logger *zap.Logger)
 	// by returning a new context with
 	// context.WithValue(context, ...)
 	// instead of just context
-	return Handler{Server: server, state: &ServerState{workspace: "", modules: []lang.Module{}, defines: []string{}, log: logger}}, ctx, nil
+	return Handler{
+		Server: server,
+		state: &ServerState{
+			workspace: "",
+			modules:   map[string][]lang.Module{},
+			defines:   map[string][]lang.Define{},
+			log:       logger,
+			files:     map[string]*File{}}}, ctx, nil
 }
 
 func (h Handler) Initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
@@ -57,6 +65,7 @@ func (h Handler) Initialize(ctx context.Context, params *protocol.InitializePara
 			DefinitionProvider:     true,
 			DeclarationProvider:    true,
 			ImplementationProvider: true,
+			TextDocumentSync:       protocol.TextDocumentSyncKindFull,
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "vlsp",

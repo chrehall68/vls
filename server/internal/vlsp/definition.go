@@ -3,7 +3,7 @@ package vlsp
 import (
 	"bufio"
 	"context"
-	"os"
+	"strings"
 
 	"github.com/chrehall68/vls/internal/lang"
 	"go.lsp.dev/protocol"
@@ -11,17 +11,14 @@ import (
 
 func (h Handler) jumpTo(fname string, line int, character int) ([]protocol.Location, error) {
 	h.state.log.Sugar().Info("opening file", fname)
-	f, err := os.Open(fname)
-	if err != nil {
-		return []protocol.Location{}, err
-	}
-	reader := bufio.NewReader(f)
+	f := h.state.files[fname].GetContents()
+	reader := bufio.NewReader(strings.NewReader(f))
 	lineString := ""
 	for l := 0; l <= line; l++ {
 		lineString, _ = reader.ReadString('\n')
 	}
 	lexer := lang.NewVLexer(h.state.log)
-	tokens := lexer.Lex(lineString)
+	tokens, _ := lexer.Lex(lineString)
 
 	h.state.log.Sugar().Info("tokens: ", tokens)
 	tokenStart := 0
@@ -32,12 +29,9 @@ func (h Handler) jumpTo(fname string, line int, character int) ([]protocol.Locat
 			// process this token
 			if token.Type == "identifier" {
 				// see if it's a module or definition
-				locatedFile := h.state.symbolMap[token.Value]
-				if locatedFile != "" {
-					result = append(result, protocol.Location{
-						URI:   protocol.DocumentURI("file://" + locatedFile),
-						Range: protocol.Range{Start: protocol.Position{Line: 0, Character: 0}, End: protocol.Position{Line: 0, Character: 0}},
-					})
+				location, ok := h.state.symbolMap[token.Value]
+				if ok {
+					result = append(result, location)
 				}
 			}
 		}

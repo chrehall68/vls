@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/chrehall68/vls/internal/lang"
+	"go.lsp.dev/protocol"
 )
 
 func (h *Handler) getFileFullPaths(dir string) []string {
@@ -23,43 +24,62 @@ func (h *Handler) getFileFullPaths(dir string) []string {
 	return paths
 }
 
-func (h Handler) GetSymbols() {
+func (h Handler) GetSymbolsForFile(fname string) {
 	vlexer := lang.NewVLexer(h.state.log)
 	parser := lang.NewParser()
-	files := h.getFileFullPaths(h.state.workspace)
 
-	fileToTokensMap := map[string][]lang.Token{}
-	for _, file := range files {
-		if strings.HasSuffix(file, ".v") {
-			// read file if it's a verilog file
-			b, err := os.ReadFile(file)
-			if err != nil {
-				panic(err)
-			}
-			text := string(b)
-
-			// get tokens
-			tokens := vlexer.Lex(text)
-
-			// add to map
-			fileToTokensMap[file] = tokens
-		}
+	// lex
+	tokens, err := vlexer.Lex(h.state.files[fname].GetContents())
+	if err != nil {
+		h.state.log.Sugar().Errorf("error lexing file %s: %s", fname, err)
+		return
 	}
 
-	// now, let's parse and store the symbols
-	h.state.defines = []string{}
-	h.state.modules = []lang.Module{}
-	h.state.symbolMap = map[string]string{}
-	for file, tokens := range fileToTokensMap {
-		results := parser.Parse(tokens)
-		h.state.defines = append(h.state.defines, results.Defines...)
-		h.state.modules = append(h.state.modules, results.Modules...)
+	// parse
+	results, err := parser.Parse(tokens)
+	if err != nil {
+		h.state.log.Sugar().Errorf("error parsing file %s: %s", fname, err)
+		h.state.defines[fname] = []lang.Define{}
+		h.state.modules[fname] = []lang.Module{}
+	} else {
+		h.state.modules[fname] = results.Modules
+		h.state.defines[fname] = results.Defines
 
 		for _, module := range results.Modules {
-			h.state.symbolMap[module.Name] = file
+			h.state.symbolMap[module.Name] = protocol.Location{
+				URI: protocol.DocumentURI("file://" + fname),
+				Range: protocol.Range{
+					Start: protocol.Position{Line: uint32(module.Token.Line()), Character: uint32(module.Token.StartCharacter())},
+					End:   protocol.Position{Line: uint32(module.Token.Line()), Character: uint32(module.Token.EndCharacter())}},
+			}
 		}
 		for _, define := range results.Defines {
-			h.state.symbolMap[define] = file
+			h.state.symbolMap[define.Name] = protocol.Location{
+				URI: protocol.DocumentURI("file://" + fname),
+				Range: protocol.Range{
+					Start: protocol.Position{Line: uint32(define.Token.Line()), Character: uint32(define.Token.StartCharacter())},
+					End:   protocol.Position{Line: uint32(define.Token.Line()), Character: uint32(define.Token.EndCharacter())}},
+			}
+		}
+	}
+}
+
+func (h Handler) GetSymbols() {
+	// first, reset state
+	h.state.defines = map[string][]lang.Define{}
+	h.state.modules = map[string][]lang.Module{}
+	h.state.symbolMap = map[string]protocol.Location{}
+
+	// then, get the files to parse
+	files := h.getFileFullPaths(h.state.workspace)
+
+	for _, file := range files {
+		if strings.HasSuffix(file, ".v") {
+			// create the file object
+			h.state.files[file] = NewFile(file)
+
+			// parse the file
+			h.GetSymbolsForFile(file)
 		}
 	}
 }

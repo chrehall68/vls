@@ -7,11 +7,34 @@ import (
 	"go.uber.org/zap"
 )
 
+// Token represents a token
 type Token struct {
-	Type  string
-	Value string
+	Type           string
+	Value          string
+	line           int
+	startCharacter int
+	endCharacter   int
 }
 
+// Returns the start character, inclusive, of this token
+// character is 0-indexed
+func (t Token) StartCharacter() int {
+	return t.startCharacter
+}
+
+// Returns the end character, inclusive, of this token.
+// character is 0-indexed
+func (t Token) EndCharacter() int {
+	return t.endCharacter
+}
+
+// Returns the line number of this token.
+// Line is 0-indexed
+func (t Token) Line() int {
+	return t.line
+}
+
+// Lexer is a lexer
 type Lexer struct {
 	regexps []*regexp.Regexp
 	funcs   []func(string) (Token, error)
@@ -42,8 +65,12 @@ func (l *Lexer) AddMappingNoCapture(pattern *regexp.Regexp, Type string) {
 	})
 }
 
-func (l *Lexer) Lex(code string) []Token {
+// Lex the code, returning a list of tokens found in the code,
+// or an error if something went wrong
+func (l *Lexer) Lex(code string) ([]Token, error) {
 	tokens := []Token{}
+	line := 0
+	lineStart := 0
 	for i := 0; i < len(code); {
 		// figure out which of the tokens will consume
 		// the most characters, and match that token
@@ -72,12 +99,23 @@ func (l *Lexer) Lex(code string) []Token {
 		// now, match the token with the code
 		token, err := f(code[i : i+maxLength])
 		if err == nil { // don't add empty tokens
+			token.startCharacter = i - lineStart
+			token.endCharacter = i + maxLength - 1 - lineStart
+			token.line = line
 			tokens = append(tokens, token)
 		} else {
-			panic(err)
+			return nil, err
+		}
+
+		// update line info and i
+		for j := 0; j < maxLength; j++ {
+			if code[i+j] == '\n' {
+				line++
+				lineStart = i + j + 1
+			}
 		}
 		i += maxLength
 	}
 
-	return tokens
+	return tokens, nil
 }

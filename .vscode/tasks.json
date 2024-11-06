@@ -2,6 +2,12 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"type": "shell",
+			"command": "cd ./server && go build",
+			"label": "Go build",
+			"group": "build",
+		},
+		{
 			"type": "npm",
 			"script": "compile",
 			"group": "build",
@@ -27,6 +33,9 @@
 			},
 			"problemMatcher": [
 				"$tsc-watch"
+			],
+			"dependsOn": [
+				"Go Build"
 			]
 		}
 	]

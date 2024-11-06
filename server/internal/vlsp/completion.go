@@ -19,19 +19,23 @@ func (h Handler) Completion(ctx context.Context, params *protocol.CompletionPara
 			InsertText: emojiCopy,
 		})
 	}
-	for _, define := range h.state.defines {
-		completionItems = append(completionItems, protocol.CompletionItem{
-			Label:      define,
-			Detail:     define,
-			InsertText: define,
-		})
+	for _, defines := range h.state.defines {
+		for _, define := range defines {
+			completionItems = append(completionItems, protocol.CompletionItem{
+				Label:      "`" + define.Name,
+				Detail:     "define",
+				InsertText: "`" + define.Name,
+			})
+		}
 	}
-	for _, module := range h.state.modules {
-		completionItems = append(completionItems, protocol.CompletionItem{
-			Label:      module.Name,
-			Detail:     module.Name,
-			InsertText: module.Name,
-		})
+	for _, modules := range h.state.modules {
+		for _, module := range modules {
+			completionItems = append(completionItems, protocol.CompletionItem{
+				Label:      module.Name,
+				Detail:     "module",
+				InsertText: module.Name,
+			})
+		}
 	}
 	h.state.log.Sugar().Infof("completionItems: %v", completionItems)
 
