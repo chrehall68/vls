@@ -46,10 +46,20 @@ func (h Handler) GetSymbols() {
 		}
 	}
 
-	// now, let's parse and print out results
-	for _, tokens := range fileToTokensMap {
+	// now, let's parse and store the symbols
+	h.state.defines = []string{}
+	h.state.modules = []lang.Module{}
+	h.state.symbolMap = map[string]string{}
+	for file, tokens := range fileToTokensMap {
 		results := parser.Parse(tokens)
 		h.state.defines = append(h.state.defines, results.Defines...)
 		h.state.modules = append(h.state.modules, results.Modules...)
+
+		for _, module := range results.Modules {
+			h.state.symbolMap[module.Name] = file
+		}
+		for _, define := range results.Defines {
+			h.state.symbolMap[define] = file
+		}
 	}
 }
