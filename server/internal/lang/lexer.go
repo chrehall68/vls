@@ -2,8 +2,9 @@ package lang
 
 import (
 	"errors"
-	"fmt"
 	"regexp"
+
+	"go.uber.org/zap"
 )
 
 type Token struct {
@@ -14,12 +15,14 @@ type Token struct {
 type Lexer struct {
 	regexps []*regexp.Regexp
 	funcs   []func(string) (Token, error)
+	logger  *zap.Logger
 }
 
-func NewLexer() *Lexer {
+func NewLexer(logger *zap.Logger) *Lexer {
 	return &Lexer{
 		regexps: []*regexp.Regexp{},
 		funcs:   []func(string) (Token, error){},
+		logger:  logger,
 	}
 }
 
@@ -61,8 +64,8 @@ func (l *Lexer) Lex(code string) []Token {
 
 		// if no token was found
 		if maxLength == 0 {
-			fmt.Println("no token found!! Still have code: ", code[i:])
-			fmt.Println("current char: ", code[i])
+			l.logger.Sugar().Errorf("no token found!! Still have code: ", code[i:])
+			l.logger.Sugar().Errorf("current char: ", code[i])
 			break
 		}
 

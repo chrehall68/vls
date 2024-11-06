@@ -2,17 +2,18 @@ package lang
 
 import (
 	"errors"
-	"fmt"
 	"regexp"
+
+	"go.uber.org/zap"
 )
 
 type VLexer struct {
 	Lexer
 }
 
-func NewVLexer() *VLexer {
+func NewVLexer(logger *zap.Logger) *VLexer {
 	vlexer := &VLexer{
-		Lexer: *NewLexer(),
+		Lexer: *NewLexer(logger),
 	}
 
 	// add mappings
@@ -70,7 +71,7 @@ func NewVLexer() *VLexer {
 		re := regexp.MustCompile("^`?(?P<IDENTIFIER>[A-Za-z][a-zA-Z0-9_]*)")
 		matches := re.FindStringSubmatch(code)
 		if len(matches) == 0 {
-			fmt.Println("failed to parse identifier on ", code)
+			vlexer.logger.Sugar().Error("failed to parse identifier on ", code)
 			return Token{}, errors.New("failed to parse identifier")
 		}
 		return Token{Type: "identifier", Value: matches[re.SubexpIndex("IDENTIFIER")]}, nil
@@ -79,8 +80,7 @@ func NewVLexer() *VLexer {
 		re := regexp.MustCompile(`^(?P<LITERAL>(([0-9]+)|([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|(\"[^\s]*\")))`)
 		matches := re.FindStringSubmatch(code)
 		if len(matches) == 0 {
-			err := fmt.Sprintln("failed to parse literal on ", code)
-			return Token{}, errors.New(err)
+			return Token{}, errors.New("failed to parse literal" + code)
 		}
 		return Token{Type: "literal", Value: matches[re.SubexpIndex("LITERAL")]}, nil
 	})
