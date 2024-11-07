@@ -4,6 +4,7 @@
  * ------------------------------------------------------------------------------------------ */
 
 import { ExtensionContext, workspace } from "vscode";
+import { resolve } from "path";
 
 import {
   LanguageClient,
@@ -13,9 +14,9 @@ import {
 
 let client: LanguageClient;
 
-export function activate(_: ExtensionContext) {
+export function activate(ctx: ExtensionContext) {
   const serverOptions: ServerOptions = {
-    command: "myls",
+    command: resolve(ctx.extensionPath, "server", "vls"),
     args: [],
   };
 
