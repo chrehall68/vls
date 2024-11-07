@@ -10,10 +10,12 @@ Current Features:
 
 - Completions
 - Go To Definition
+- Token Highlighting
 
 Roadmap Features:
 
-- Token Highlighting
+- Parsing Module Insides
+- Error-tolerant parser
 - Improved Completions
 - Diagnostics
 

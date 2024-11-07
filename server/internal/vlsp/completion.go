@@ -37,7 +37,7 @@ func (h Handler) Completion(ctx context.Context, params *protocol.CompletionPara
 			})
 		}
 	}
-	h.state.log.Sugar().Infof("completionItems: %v", completionItems)
+	//h.state.log.Sugar().Infof("completionItems: %v", completionItems)
 
 	return &protocol.CompletionList{Items: completionItems, IsIncomplete: true}, nil
 }

@@ -66,6 +66,7 @@ func (h Handler) Initialize(ctx context.Context, params *protocol.InitializePara
 			DeclarationProvider:    true,
 			ImplementationProvider: true,
 			TextDocumentSync:       protocol.TextDocumentSyncKindFull,
+			SemanticTokensProvider: GetSemanticTokensOptions(),
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "vlsp",
