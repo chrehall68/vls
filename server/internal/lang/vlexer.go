@@ -76,8 +76,8 @@ func NewVLexer(logger *zap.Logger) *VLexer {
 		}
 		return Token{Type: "identifier", Value: matches[re.SubexpIndex("IDENTIFIER")]}, nil
 	})
-	vlexer.AddMapping(regexp.MustCompile(`^(([0-9]+)|([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|(\"[^\s]*\"))`), func(code string) (Token, error) {
-		re := regexp.MustCompile(`^(?P<LITERAL>(([0-9]+)|([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|(\"[^\s]*\")))`)
+	vlexer.AddMapping(regexp.MustCompile(`^(([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|([0-9]+)|(\"[^\s]*\"))`), func(code string) (Token, error) {
+		re := regexp.MustCompile(`^(?P<LITERAL>(([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|([0-9]+)|(\"[^\s]*\")))`)
 		matches := re.FindStringSubmatch(code)
 		if len(matches) == 0 {
 			return Token{}, errors.New("failed to parse literal" + code)

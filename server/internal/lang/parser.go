@@ -29,45 +29,6 @@ func NewParser() *Parser {
 	}
 }
 
-/**
-Grammar:
-
-// top level grammar
-<start> -> <statement> { <statement> }
-<statement> -> <module> | <directive> | <skippable>
-
-// sub grammars
-<skippable> -> WHITESPACE | COMMENT | NEWLINE
-
-<directive> -> <include> | <timescale> | <define>
-<include> -> INCLUDE
-<timescale> -> TIMESCALE <non-newline> NEWLINE
-<define> -> DEFINE <identifier> <non-newline> NEWLINE
-<identifier> -> IDENTIFIER
-
-
-<module> -> MODULE <identifier> [<portlist>] SEMICOLON <interior> ENDMODULE
-<portlist> -> LPAREN [<ports>] RPAREN
-<ports> -> <identifier> { COMMA <identifier> }
-*/
-
-func (p *Parser) skip(tokens []Token, skippables []string, pos int) int {
-	i := pos
-	for ; i < len(tokens); i++ {
-		skippable := false
-		for j := 0; j < len(skippables); j++ {
-			if tokens[i].Type == skippables[j] {
-				skippable = true
-				break
-			}
-		}
-		if !skippable {
-			break
-		}
-	}
-	return i
-}
-
 // start with the skippable parts that we don't care about
 func (p *Parser) skipInclude(tokens []Token, pos int) int {
 	// skip over the include
