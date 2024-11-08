@@ -41,7 +41,7 @@ func NewVLexer(logger *zap.Logger) *VLexer {
 	// comparisons/assignments
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\=\=)|(\!\=)|(\<\=)|(>\=)|\>|\<|(\=\=\=)|(\!\-\=))`), "comparator")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\&\&)|(\|\|))`), "logical_operator")
-	vlexer.AddMappingNoCapture(regexp.MustCompile(`^[\+\-\*\/\|&]`), "operator")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^([\+\-\*\/\|&]|(\<\<)|(\>\>))`), "operator")
 	// symbols
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\(`), "lparen")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\)`), "rparen")

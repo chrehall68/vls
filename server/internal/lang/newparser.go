@@ -15,6 +15,7 @@ type InteriorNode struct {
 	DeclarationNode       *DeclarationNode
 	AssignmentNode        *AssignmentNode
 	ModuleApplicationNode *ModuleApplicationNode
+	GenerateNode          *GenerateNode
 }
 type ModuleNode struct {
 	Identifier Token        // name of module
@@ -33,30 +34,35 @@ type DirectiveNode struct {
 type AssignmentNode struct {
 	Identifier Token
 	Index      *IndexNode
-	Value      ValueNode
+	Value      ExprNode
+	IsAssign   bool
 }
 type IndexNode struct {
-	Index Token // identifier, or literal
+	Index ExprNode
 }
 type SelectorNode struct {
 	IndexNode *IndexNode
 	RangeNode *RangeNode
 }
 type ValueNode struct {
-	Identifiers []Token // technically, there could be literals too, but we don't care?
+	Value     Token // technically, there could be literals too, but we don't care?
+	Selectors []SelectorNode
+}
+type SizedValueNode struct {
+	Values []ValueNode
 }
 type DeclarationNode struct {
 	Type      TypeNode
 	Variables []VariableNode
-	Value     *ValueNode
+	Value     *ExprNode
 }
 type VariableNode struct {
 	Identifier Token
 	Range      *RangeNode
 }
 type RangeNode struct {
-	From Token
-	To   Token
+	From ExprNode
+	To   ExprNode
 }
 type TypeNode struct {
 	Type        Token
@@ -65,15 +71,48 @@ type TypeNode struct {
 type ModuleApplicationNode struct {
 	ModuleName Token  // name of the module
 	GateName   *Token // name of this gate construct, could be nil
+	Range      *RangeNode
 	Arguments  []ArgumentNode
 }
 type ArgumentNode struct {
-	Label *Token    // label for argument name, could be nil
-	Value ValueNode // value of the argument
+	Label *Token   // label for argument name, could be nil
+	Value ExprNode // value of the argument
+}
+type ExprNode struct {
+	Value      SizedValueNode
+	Operator   *Token
+	Right      *ExprNode
+	Comparator *Token
+	CompareTo  *ExprNode
+	ExprTrue   *ExprNode
+	ExprFalse  *ExprNode
+}
+type GenerateNode struct {
+	Statements []GenerateableStatement
+}
+type GenerateableStatement struct {
+	BeginBlock   *BeginBlockNode
+	ForBlock     *ForBlockNode
+	IfBlock      *IfBlockNode
+	InteriorNode *InteriorNode
+}
+type BeginBlockNode struct {
+	Statements []GenerateableStatement
+}
+type ForBlockNode struct {
+	Initializer *AssignmentNode
+	Condition   *ExprNode
+	Incrementor *AssignmentNode
+	Body        BeginBlockNode
+}
+type IfBlockNode struct {
+	Expr ExprNode
+	Body GenerateableStatement
+	Else *GenerateableStatement
 }
 
 func newErrorFrom(from string, expected []string, pos int, tokens []Token) error {
-	return fmt.Errorf("parsing %s, expected %v, got: %v at position %d, remaining tokens: %v", from, expected, tokens[pos], pos, tokens[pos+1:])
+	return fmt.Errorf("parsing %s, expected %v, got: %v at position %d", from, expected, tokens[pos], pos)
 }
 func (p *Parser) skip(tokens []Token, skippables []string, pos int) int {
 	i := pos
@@ -127,12 +166,11 @@ func (p *Parser) ParseRangeNode(tokens []Token, pos int) (result RangeNode, newP
 	pos++
 
 	// now take the from
-	pos, err = p.checkToken("range node", []string{"identifier", "literal"}, pos, tokens)
+	fromNode, pos, err := p.ParseExpression(tokens, pos)
 	if err != nil {
 		return
 	}
-	result.From = tokens[pos]
-	pos++
+	result.From = fromNode
 
 	// double check for colon
 	pos, err = p.checkToken("range node", []string{"colon"}, pos, tokens)
@@ -142,12 +180,11 @@ func (p *Parser) ParseRangeNode(tokens []Token, pos int) (result RangeNode, newP
 	pos++
 
 	// take the to
-	pos, err = p.checkToken("range node", []string{"identifier", "literal"}, pos, tokens)
+	toNode, pos, err := p.ParseExpression(tokens, pos)
 	if err != nil {
 		return
 	}
-	result.To = tokens[pos]
-	pos++
+	result.To = toNode
 
 	// double check for rbracket
 	pos, err = p.checkToken("range node", []string{"rbracket"}, pos, tokens)
@@ -166,12 +203,13 @@ func (p *Parser) ParseIndexNode(tokens []Token, pos int) (result IndexNode, newP
 		return
 	}
 	pos++
-	pos, err = p.checkToken("index node", []string{"identifier", "literal"}, pos, tokens)
+
+	indexNode, pos, err := p.ParseExpression(tokens, pos)
 	if err != nil {
 		return
 	}
-	result.Index = tokens[pos]
-	pos++
+	result.Index = indexNode
+
 	pos, err = p.checkToken("index node", []string{"rbracket"}, pos, tokens)
 	if err != nil {
 		return
@@ -181,8 +219,7 @@ func (p *Parser) ParseIndexNode(tokens []Token, pos int) (result IndexNode, newP
 	return
 }
 
-// <selector> -> LBRACKET <ident_or_int> [COLON <ident_or_int>] RBRACKET
-// <ident_or_int> -> <identifier> | LITERAL
+// <selector> -> LBRACKET <expr> [COLON <expr>] RBRACKET
 func (p *Parser) ParseSelectorNode(tokens []Token, pos int) (result SelectorNode, newPos int, err error) {
 	// check for lbracket
 	pos, err = p.checkToken("selector node", []string{"lbracket"}, pos, tokens)
@@ -191,12 +228,10 @@ func (p *Parser) ParseSelectorNode(tokens []Token, pos int) (result SelectorNode
 	}
 	pos++
 
-	pos, err = p.checkToken("selector node", []string{"identifier", "literal"}, pos, tokens)
+	firstNode, pos, err := p.ParseExpression(tokens, pos)
 	if err != nil {
 		return
 	}
-	firstToken := tokens[pos]
-	pos++
 
 	// check for colon
 	potentialPos, e := p.checkToken("selector node", []string{"colon"}, pos, tokens)
@@ -205,15 +240,15 @@ func (p *Parser) ParseSelectorNode(tokens []Token, pos int) (result SelectorNode
 		pos = potentialPos
 		pos++
 
-		pos, err = p.checkToken("selector node", []string{"identifier", "literal"}, pos, tokens)
-		if err != nil {
+		secondNode, potentialPos, e := p.ParseExpression(tokens, pos)
+		if e != nil {
+			err = e
 			return
 		}
-		secondToken := tokens[pos]
-		pos++
-		result = SelectorNode{RangeNode: &RangeNode{From: firstToken, To: secondToken}}
+		pos = potentialPos
+		result = SelectorNode{RangeNode: &RangeNode{From: firstNode, To: secondNode}}
 	} else {
-		result = SelectorNode{IndexNode: &IndexNode{Index: firstToken}}
+		result = SelectorNode{IndexNode: &IndexNode{Index: firstNode}}
 	}
 
 	// check for rbracket
@@ -227,101 +262,188 @@ func (p *Parser) ParseSelectorNode(tokens []Token, pos int) (result SelectorNode
 	return
 }
 
-// returned position is the position after the value node
-func (p *Parser) ParseValueNode(tokens []Token, pos int) (result ValueNode, newPos int, err error) {
-	pos, err = p.checkToken("value node", []string{"identifier", "literal", "lcurl"}, pos, tokens)
+// <sized_value> -> [ LITERAL ] LCURL <sized_value> { COMMA <sized_value> } RCURL | <value>
+func (p *Parser) parseSized(tokens []Token, pos int) (result SizedValueNode, newPos int, err error) {
+	// seems to be a sized value
+	potentialPos, e := p.checkToken("sized value", []string{"literal"}, pos, tokens)
+	if e == nil {
+		// there was a size; we'll just ignore it for now
+		// TODO - do something with size?
+		pos = potentialPos + 1
+	}
+
+	// now take the lcurl
+	pos, err = p.checkToken("sized value", []string{"lcurl"}, pos, tokens)
 	if err != nil {
 		return
 	}
-	// now, determine what it is
-	if tokens[pos].Type == "identifier" {
-		result.Identifiers = []Token{tokens[pos]}
-		pos++
-		_, potentialPos, e := p.ParseSelectorNode(tokens, pos)
-		if e == nil {
-			// there was a selector
-			// TODO - maybe store it?
-			pos = potentialPos
-		}
-	} else if tokens[pos].Type == "literal" {
-		// literal, so no need to store it
-		// result.Identifiers = []Token{tokens[pos]}
-		pos++
-		newPos = pos
+	pos++
 
-		// this literal might just be a size
-		potentialPos, e := p.checkToken("value node", []string{"lcurl"}, pos, tokens)
-		if e == nil {
-			// this was just the size, so parse the inner value
-			// (copied code from the lcurl case below)
-			pos = potentialPos
-			pos++
-			inner, potentialPos, e := p.ParseValueNode(tokens, pos)
-			if e == nil {
-				// success!
-				result.Identifiers = inner.Identifiers
-				pos = potentialPos
-			}
-			// now, find the rest of the subparts
-			potentialPos, e = p.checkToken("value node", []string{"comma"}, pos, tokens)
-			for e == nil {
-				inner, potentialPos, e = p.ParseValueNode(tokens, potentialPos+1) // potentialPos was position of comma
-				if e == nil {
-					result.Identifiers = append(result.Identifiers, inner.Identifiers...)
-					pos = potentialPos
-				} else {
-					// TODO - something went wrong, should we stop here or try to keep going?
-				}
-				potentialPos, e = p.checkToken("value node", []string{"comma"}, pos, tokens)
-			}
-			// finally, the rcurl
-			pos, err = p.checkToken("value node", []string{"rcurl"}, pos, tokens)
-			if err != nil {
-				return
-			}
-			pos++
-			newPos = pos
+	// now take the values
+	sizedNode, potentialPos, e := p.ParseSizedValueNode(tokens, pos)
+	if e != nil {
+		// there must be at least one value
+		err = e
+		return
+	}
+
+	// take the rest
+	for e == nil {
+		result.Values = append(result.Values, sizedNode.Values...)
+		pos = potentialPos
+
+		potentialPos, e = p.checkToken("sized value", []string{"comma"}, pos, tokens)
+		if e != nil {
+			break
+		}
+		sizedNode, potentialPos, e = p.ParseSizedValueNode(tokens, potentialPos+1)
+	}
+
+	// take the rcurl
+	pos, err = p.checkToken("sized value", []string{"rcurl"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+	newPos = pos
+	return
+}
+
+func (p *Parser) ParseSizedValueNode(tokens []Token, pos int) (result SizedValueNode, newPos int, err error) {
+	// try just taking a value
+	sizedNode, potentialPos, e := p.parseSized(tokens, pos)
+	if e == nil {
+		// it was sized
+		result = sizedNode
+		pos = potentialPos
+	} else {
+		// it wasn't
+		valueNode, potentialPos, e := p.ParseValueNode(tokens, pos)
+		if e != nil {
+			err = e
 			return
 		}
+		result.Values = []ValueNode{valueNode}
+		pos = potentialPos
+	}
+	newPos = pos
+	return
+}
 
-		// might also be a selector
-		_, potentialPos, e = p.ParseSelectorNode(tokens, pos)
-		if e == nil {
-			// there was a selector
-			// TODO - maybe store it?
-			pos = potentialPos
+// returned position is the position after the value node
+func (p *Parser) ParseValueNode(tokens []Token, pos int) (result ValueNode, newPos int, err error) {
+	pos, err = p.checkToken("value node", []string{"identifier", "literal"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	// take the value
+	result.Value = tokens[pos]
+	pos++
+
+	// and any selectors
+	selectorNode, potentialPos, e := p.ParseSelectorNode(tokens, pos)
+	for e == nil {
+		pos = potentialPos
+		result.Selectors = append(result.Selectors, selectorNode)
+		selectorNode, potentialPos, e = p.ParseSelectorNode(tokens, pos)
+	}
+
+	newPos = pos
+	return
+}
+
+func (p *Parser) ParseExpression(tokens []Token, pos int) (result ExprNode, newPos int, err error) {
+	// <expr> -> <value> [OPERATOR <expr>] [ COMPARATOR <expr> [ QUESTION <expr> COLON <expr> ] ]
+	// | LPAREN <expr> RPAREN
+
+	potentialPos, e := p.checkToken("expression", []string{"lparen"}, pos, tokens)
+	if e == nil {
+		// nested expression
+		pos = potentialPos + 1
+		result, pos, err = p.ParseExpression(tokens, pos)
+		if err != nil {
+			return
 		}
-	} else if tokens[pos].Type == "lcurl" {
-		// some sort of concatenation of things...
-		// TODO - maybe store it?
-		// for now, just find all the identifiers in the subpart
-		pos++
-		inner, potentialPos, e := p.ParseValueNode(tokens, pos)
-		if e == nil {
-			// success!
-			result.Identifiers = inner.Identifiers
-			pos = potentialPos
-		}
-		// now, find the rest of the subparts
-		potentialPos, e = p.checkToken("value node", []string{"comma"}, pos, tokens)
-		for e == nil {
-			inner, potentialPos, e = p.ParseValueNode(tokens, potentialPos+1) // potentialPos was position of comma
-			if e == nil {
-				result.Identifiers = append(result.Identifiers, inner.Identifiers...)
-				pos = potentialPos
-			} else {
-				// TODO - something went wrong, should we stop here or try to keep going?
-			}
-			potentialPos, e = p.checkToken("value node", []string{"comma"}, pos, tokens)
-		}
-		// finally, the rcurl
-		pos, err = p.checkToken("value node", []string{"rcurl"}, pos, tokens)
+		// check for rparen
+		pos, err = p.checkToken("expression", []string{"rparen"}, pos, tokens)
 		if err != nil {
 			return
 		}
 		pos++
-	}
+	} else {
+		// more complicated expression
+		value, potentialPos, e := p.ParseSizedValueNode(tokens, pos)
+		if e != nil {
+			err = e
+			return
+		}
+		pos = potentialPos
+		result.Value = value
 
+		// check for operator
+		potentialPos, e = p.checkToken("expression", []string{"operator"}, pos, tokens)
+		if e == nil {
+			// had an operator
+			pos = potentialPos
+			result.Operator = &tokens[pos]
+			pos++
+
+			// get the right expression
+			tmp, potentialPos, e := p.ParseExpression(tokens, pos)
+			if e != nil {
+				err = e
+				return
+			}
+			result.Right = &tmp
+			pos = potentialPos
+		}
+
+		// check for comparison
+		potentialPos, e = p.checkToken("expression", []string{"comparator"}, pos, tokens)
+		if e == nil {
+			// had a comparator
+			pos = potentialPos
+			result.Comparator = &tokens[pos]
+			pos++
+			tmp, potentialPos, e := p.ParseExpression(tokens, pos)
+			if e != nil {
+				err = e
+				return
+			}
+			result.CompareTo = &tmp
+			pos = potentialPos
+
+			// check for ternary
+			potentialPos, e = p.checkToken("expression", []string{"question"}, pos, tokens)
+			if e == nil {
+				// get the true expression
+				pos = potentialPos + 1
+				tmp, potentialPos, e = p.ParseExpression(tokens, pos)
+				if e != nil {
+					err = e
+					return
+				}
+				result.ExprTrue = &tmp
+				pos = potentialPos
+
+				// need a colon
+				pos, err = p.checkToken("expression", []string{"colon"}, pos, tokens)
+				if err != nil {
+					return
+				}
+				pos++
+
+				// get the false expression
+				tmp, potentialPos, e = p.ParseExpression(tokens, pos)
+				if e != nil {
+					err = e
+					return
+				}
+				result.ExprFalse = &tmp
+				pos = potentialPos
+			}
+		}
+	}
 	newPos = pos
 	return
 }
@@ -350,7 +472,7 @@ func (p *Parser) ParseArgument(tokens []Token, pos int) (result ArgumentNode, ne
 		pos++
 
 		// get value
-		value, potentialPos, e := p.ParseValueNode(tokens, pos)
+		value, potentialPos, e := p.ParseExpression(tokens, pos)
 		if e == nil {
 			// success!
 			result.Value = value
@@ -370,7 +492,7 @@ func (p *Parser) ParseArgument(tokens []Token, pos int) (result ArgumentNode, ne
 		return
 	} else {
 		// just a value
-		value, potentialPos, e := p.ParseValueNode(tokens, pos)
+		value, potentialPos, e := p.ParseExpression(tokens, pos)
 		if e == nil {
 			// success!
 			result.Value = value
@@ -427,6 +549,13 @@ func (p *Parser) ParseModuleApplication(tokens []Token, pos int) (result ModuleA
 		pos = potentialPos + 1
 	}
 
+	// might have a gate range
+	rangeNode, potentialPos, e := p.ParseRangeNode(tokens, pos)
+	if e == nil {
+		result.Range = &rangeNode
+		pos = potentialPos
+	}
+
 	// check for lparen
 	pos, err = p.checkToken("module application", []string{"lparen"}, pos, tokens)
 	if err != nil {
@@ -481,8 +610,16 @@ func (p *Parser) ParseVariableNode(tokens []Token, pos int) (result VariableNode
 	newPos = pos
 	return
 }
-func (p *Parser) ParseAssignmentNode(tokens []Token, pos int) (result AssignmentNode, newPos int, err error) {
-	// <identifier> [<index>] EQUALS <value> SEMICOLON
+func (p *Parser) ParseAssignmentNodeWithoutSemicolon(tokens []Token, pos int) (result AssignmentNode, newPos int, err error) {
+	// [ASSIGN] <identifier> [<index>] EQUALS <expr>
+	// TODO - get the expr, not just a value
+	potentialPos, e := p.checkToken("assignment", []string{"assign"}, pos, tokens)
+	// it's ok if it fails since it's optional
+	if e == nil {
+		pos = potentialPos + 1
+		result.IsAssign = true
+	}
+
 	pos, err = p.checkToken("assignment", []string{"identifier"}, pos, tokens)
 	if err != nil {
 		return
@@ -498,15 +635,15 @@ func (p *Parser) ParseAssignmentNode(tokens []Token, pos int) (result Assignment
 		pos = potentialPos
 	}
 
-	// check for equals
-	pos, err = p.checkToken("assignment", []string{"equals"}, pos, tokens)
+	// check for equal
+	pos, err = p.checkToken("assignment", []string{"equal"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// get the value
-	valueNode, potentialPos, e := p.ParseValueNode(tokens, pos)
+	valueNode, potentialPos, e := p.ParseExpression(tokens, pos)
 	if e == nil {
 		// success!
 		result.Value = valueNode
@@ -514,6 +651,16 @@ func (p *Parser) ParseAssignmentNode(tokens []Token, pos int) (result Assignment
 	} else {
 		// this is really an error since the value is required
 		// TODO - error handling
+	}
+
+	newPos = pos
+	return
+}
+func (p *Parser) ParseAssignmentNode(tokens []Token, pos int) (result AssignmentNode, newPos int, err error) {
+	// <assignment> SEMICOLON
+	result, pos, err = p.ParseAssignmentNodeWithoutSemicolon(tokens, pos)
+	if err != nil {
+		return
 	}
 
 	// check for semicolon
@@ -566,11 +713,11 @@ func (p *Parser) ParseDeclarationNode(tokens []Token, pos int) (result Declarati
 	result.Variables = []VariableNode{variableNode}
 	pos = potentialPos
 
-	// see if it's an equals
-	potentialPos, e = p.checkToken("declaration", []string{"equals"}, pos, tokens)
+	// see if it's an equal
+	potentialPos, e = p.checkToken("declaration", []string{"equal"}, pos, tokens)
 	if e == nil {
-		// it's an equals, so there's a value
-		valueNode, potentialPos, e := p.ParseValueNode(tokens, potentialPos+1)
+		// it's an equal, so there's a value
+		valueNode, potentialPos, e := p.ParseExpression(tokens, potentialPos+1)
 		if e == nil {
 			// success!
 			result.Value = &valueNode
@@ -608,8 +755,225 @@ func (p *Parser) ParseDeclarationNode(tokens []Token, pos int) (result Declarati
 	return
 }
 
+func (p *Parser) ParseBeginBlock(tokens []Token, pos int) (result BeginBlockNode, newPos int, err error) {
+	// BEGIN <generateable_statements> END
+	pos, err = p.checkToken("begin block", []string{"begin"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get the generateable statements
+	generateableStatements, potentialPos, e := p.ParseGenerateableStatements(tokens, pos)
+	if e != nil {
+		err = e
+		return
+	}
+	result.Statements = generateableStatements
+	pos = potentialPos
+
+	// check for end
+	pos, err = p.checkToken("begin block", []string{"end"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+	newPos = pos
+	return
+}
+func (p *Parser) ParseIfBlock(tokens []Token, pos int) (result IfBlockNode, newPos int, err error) {
+	// IF LPAREN <expr> RPAREN <generateable_statement> [ELSE <generateable_statement>]
+	// get if
+	pos, err = p.checkToken("if block", []string{"if"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get lparen
+	pos, err = p.checkToken("if block", []string{"lparen"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get expression
+	expression, potentialPos, e := p.ParseExpression(tokens, pos)
+	if e != nil {
+		err = e
+		return
+	}
+	result.Expr = expression
+	pos = potentialPos
+
+	// get rparen
+	pos, err = p.checkToken("if block", []string{"rparen"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get generateable statement
+	generateableStatement, potentialPos, e := p.ParseGenerateableStatement(tokens, pos)
+	if e != nil {
+		err = e
+		return
+	}
+	result.Body = generateableStatement
+	pos = potentialPos
+
+	// get else
+	potentialPos, e = p.checkToken("if block", []string{"else"}, pos, tokens)
+	if e == nil {
+		pos = potentialPos + 1
+		// get generateable statement
+		generateableStatement, potentialPos, e := p.ParseGenerateableStatement(tokens, pos)
+		if e != nil {
+			err = e
+			return
+		}
+		result.Else = &generateableStatement
+		pos = potentialPos
+	}
+
+	newPos = pos
+	return
+}
+func (p *Parser) ParseForBlock(tokens []Token, pos int) (result ForBlockNode, newPos int, err error) {
+	// <for> -> FOR LPAREN [<assignment_without_semicolon>] SEMICOLON [<expr>] SEMICOLON [<assignment_without_semicolon>] RPAREN <begin_block>
+	// get for
+	pos, err = p.checkToken("for block", []string{"for"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+	// get lparen
+	pos, err = p.checkToken("for block", []string{"lparen"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+	// get assignment_without_semicolon, optionally
+	assignmentWithoutSemicolon, potentialPos, e := p.ParseAssignmentNodeWithoutSemicolon(tokens, pos)
+	if e == nil {
+		result.Initializer = &assignmentWithoutSemicolon
+		pos = potentialPos
+	}
+	// get semicolon
+	pos, err = p.checkToken("for block", []string{"semicolon"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+	// get expr, optionally
+	expr, potentialPos, e := p.ParseExpression(tokens, pos)
+	if e == nil {
+		result.Condition = &expr
+		pos = potentialPos
+	}
+	// get semicolon
+	pos, err = p.checkToken("for block", []string{"semicolon"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+	// get assignment_without_semicolon, optionally
+	assignmentWithoutSemicolon, potentialPos, e = p.ParseAssignmentNodeWithoutSemicolon(tokens, pos)
+	if e == nil {
+		result.Incrementor = &assignmentWithoutSemicolon
+		pos = potentialPos
+	}
+
+	// get rparen
+	pos, err = p.checkToken("for block", []string{"rparen"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+	// get begin_block
+	beginBlock, potentialPos, e := p.ParseBeginBlock(tokens, pos)
+	if e != nil {
+		err = e
+		return
+	}
+	pos = potentialPos
+	result.Body = beginBlock
+	newPos = pos
+	return
+}
+
+func (p *Parser) ParseGenerateableStatement(tokens []Token, pos int) (result GenerateableStatement, newPos int, err error) {
+	// <generateable_statements> -> <begin_block> | <interior_statement> | <for> | <if>
+	// TODO - update once we filled out the others
+	beginResult, potentialPos, e := p.ParseBeginBlock(tokens, pos)
+	if e == nil {
+		result.BeginBlock = &beginResult
+		pos = potentialPos
+	} else {
+		interiorResult, potentialPos, e := p.ParseInteriorStatement(tokens, pos)
+		if e == nil {
+			result.InteriorNode = &interiorResult
+			pos = potentialPos
+		} else {
+			forResult, potentialPos, e := p.ParseForBlock(tokens, pos)
+			if e == nil {
+				result.ForBlock = &forResult
+				pos = potentialPos
+			} else {
+				ifResult, potentialPos, e := p.ParseIfBlock(tokens, pos)
+				if e == nil {
+					result.IfBlock = &ifResult
+					pos = potentialPos
+				} else {
+					err = e
+				}
+			}
+		}
+	}
+	newPos = pos
+	return
+}
+func (p *Parser) ParseGenerateableStatements(tokens []Token, pos int) (result []GenerateableStatement, newPos int, err error) {
+	generateableStatement, potentialPos, e := p.ParseGenerateableStatement(tokens, pos)
+	for e == nil {
+		result = append(result, generateableStatement)
+		pos = potentialPos
+		generateableStatement, potentialPos, e = p.ParseGenerateableStatement(tokens, pos)
+	}
+	newPos = pos
+	return
+}
+func (p *Parser) ParseGenerate(tokens []Token, pos int) (result GenerateNode, newPos int, err error) {
+	// <generate> -> GENERATE <generateable_statements> ENDGENERATE
+	// get generate
+	pos, err = p.checkToken("generate", []string{"generate"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get generateable_statements
+	generateableStatements, potentialPos, e := p.ParseGenerateableStatements(tokens, pos)
+	if e != nil {
+		err = e
+		return
+	}
+	result.Statements = generateableStatements
+	pos = potentialPos
+
+	// get endgenerate
+	pos, err = p.checkToken("generate", []string{"endgenerate"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	newPos = pos
+	return
+}
+
 func (p *Parser) ParseInteriorStatement(tokens []Token, pos int) (result InteriorNode, newPos int, err error) {
-	// it could be either a declaration or module_application or assignment
+	// it could be either a declaration or module_application or assignment or generate
 
 	// check if it's a declaration
 	declarationNode, potentialPos, e := p.ParseDeclarationNode(tokens, pos)
@@ -632,8 +996,14 @@ func (p *Parser) ParseInteriorStatement(tokens []Token, pos int) (result Interio
 				result.AssignmentNode = &assignmentNode
 				pos = potentialPos
 			} else {
-				err = e
-				return
+				// check if it's a generate
+				generateNode, potentialPos, e := p.ParseGenerate(tokens, pos)
+				if e == nil {
+					result.GenerateNode = &generateNode
+					pos = potentialPos
+				} else {
+					err = e
+				}
 			}
 		}
 	}
@@ -873,41 +1243,57 @@ func (p *Parser) ParseFile(tokens []Token) (result FileNode, err error) {
 /**
 Grammar:
 
-// top level grammar
+// ==============================
+// Top Level Grammar
+// ==============================
 <file> -> <statement> { <statement> }
-<statement> -> <module> | <directive> | <skippable>
+<statement> -> <module> | <directive>
 
-// sub grammars
-<skippable> -> WHITESPACE | COMMENT | NEWLINE
+// useful helper grammars
+<identifier> -> IDENTIFIER
 
+
+// ==============================
+// Directive Grammar
+// ==============================
 <directive> -> <include> | <timescale> | <define>
 <include> -> INCLUDE
 <timescale> -> TIMESCALE <non-newline> NEWLINE
 <define> -> DEFINE <identifier> <non-newline> NEWLINE
-<identifier> -> IDENTIFIER
 
-
+// ==============================
+// Module Grammar
+// ==============================
 <module> -> MODULE <identifier> [<portlist>] SEMICOLON <interior> ENDMODULE [SEMICOLON]
 <portlist> -> LPAREN [<ports>] RPAREN
 <ports> -> <identifier> { COMMA <identifier> }
 
 <interior> -> { <interior_statement> }
-<interior_statement>  -> <declaration> | <module_application> | <assignment>
+<interior_statement>  -> <declaration> | <module_application> | <assignment> | <generate>
 
-<assignment> -> <identifier> [<index>] EQUALS <value> SEMICOLON
+<assignment_without_semicolon> -> [ASSIGN] <identifier> [<index>] EQUALS <expr>
+<assignment> -> <assignment_without_semicolon> SEMICOLON
 <single_var> -> <identifier> [<range>]
 
-<declaration> -> <type> <single_var> [EQUALS <value>] SEMICOLON
+<declaration> -> <type> <single_var> [EQUALS <expr>] SEMICOLON
 | <type> <single_var> { COMMA <single_var> } SEMICOLON
 <type> -> TYPE [<range>]
 <index> -> LBRACKET <identifier> RBRACKET | LBRACKET <integer> RBRACKET
 <range> -> LBRACKET <integer> COLON <integer> RBRACKET
 <integer> -> LITERAL | DEFINE
 
-<module_application> -> <identifier> [<identifier>] LPAREN <arguments> RPAREN SEMICOLON
+<module_application> -> <identifier> [<identifier>] [<range>] LPAREN <arguments> RPAREN SEMICOLON
 <arguments> -> <argument> { COMMA <argument> }
-<argument> -> DOT <identifier> LPAREN  <value>  RPAREN | <value>
-<value> -> [LITERAL] LCURL <value> {COMMA <value>} RCURL | LITERAL [<selector>] | <identifier> [<selector]
-<selector> -> LBRACKET <ident_or_int> [COLON <ident_or_int>] RBRACKET
-<ident_or_int> -> <identifier> | LITERAL
+<argument> -> DOT <identifier> LPAREN  <expr>  RPAREN | <expr>
+<selector> -> LBRACKET <expr> [COLON <expr>] RBRACKET
+<expr> -> <sized_value> [OPERATOR <expr>] [ COMPARATOR <expr> [ QUESTION <expr> COLON <expr> ] ]
+			| LPAREN <expr> RPAREN
+<sized_value> -> [ LITERAL ] LCURL <sized_value> { COMMA <sized_value> } RCURL | <value>
+<value> -> LITERAL { <selector> } | <identifier> { <selector> }
+
+<generate> -> GENERATE { <generateable_statement> } ENDGENERATE
+<generateable_statement> -> <begin_block> | <interior_statement> | <for> | <if>
+<begin_block> -> BEGIN <generateable_statements> END
+<for> -> FOR LPAREN [<assignment_without_semicolon>] SEMICOLON [<expr>] SEMICOLON [<assignment_without_semicolon>] RPAREN <begin_block>
+<if> -> IF LPAREN <expr> RPAREN <generateable_statement> [ELSE <generateable_statement>]
 */
