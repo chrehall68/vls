@@ -118,6 +118,7 @@ type AlwaysStatement struct {
 	IfBlock      *IfBlockNode
 	InteriorNode *InteriorNode
 	FunctionNode *FunctionNode
+	CaseNode     *CaseBlock
 }
 type TimeNode struct {
 	Time       *Token // negedge, posedge, or nil
@@ -137,9 +138,18 @@ type DefParamNode struct {
 type InitialNode struct {
 	Statement AlwaysStatement
 }
+type CaseBlock struct {
+	Expr    ExprNode
+	Cases   []CaseNode
+	Default *AlwaysStatement
+}
+type CaseNode struct {
+	Conditions []ExprNode
+	Statement  AlwaysStatement
+}
 
 func newErrorFrom(from string, expected []string, pos int, tokens []Token) error {
-	return fmt.Errorf("parsing %s, expected %v, got: %v at position %d, have remaining %v", from, expected, tokens[pos], pos, tokens[pos:])
+	return fmt.Errorf("parsing %s, expected %v, got: %v at position %d", from, expected, tokens[pos], pos)
 }
 func (p *Parser) skip(tokens []Token, skippables []string, pos int) int {
 	i := pos
@@ -357,6 +367,41 @@ func (p *Parser) ParseSizedValueNode(tokens []Token, pos int) (result SizedValue
 	return
 }
 
+// <maybe_signed> -> <sized_value> | SIGNED LPAREN <sized_value> RPAREN
+func (p *Parser) ParseSigned(tokens []Token, pos int) (result SizedValueNode, newPos int, err error) {
+	potentialPos, e := p.checkToken("signed", []string{"signed"}, pos, tokens)
+	if e == nil {
+		// it was signed
+		pos = potentialPos + 1
+
+		// take lparen
+		pos, err = p.checkToken("signed", []string{"lparen"}, pos, tokens)
+		if err != nil {
+			return
+		}
+		pos++
+
+		// take sized value
+		result, pos, err = p.ParseSizedValueNode(tokens, pos)
+		if err != nil {
+			return
+		}
+
+		// take rparen
+		pos, err = p.checkToken("signed", []string{"rparen"}, pos, tokens)
+		if err != nil {
+			return
+		}
+		pos++
+
+	} else {
+		// just a regular sized value
+		result, pos, err = p.ParseSizedValueNode(tokens, pos)
+	}
+	newPos = pos
+	return
+}
+
 // returned position is the position after the value node
 func (p *Parser) ParseValueNode(tokens []Token, pos int) (result ValueNode, newPos int, err error) {
 	// <value> -> [TILDE| - ] (LITERAL|(<identifier> { DOT <identifier> })|FUNCLITERAL) { <selector> }
@@ -427,7 +472,7 @@ func (p *Parser) ParseExpression(tokens []Token, pos int) (result ExprNode, newP
 		pos++
 	} else {
 		// just a value
-		value, potentialPos, e := p.ParseSizedValueNode(tokens, pos)
+		value, potentialPos, e := p.ParseSigned(tokens, pos)
 		if e != nil {
 			err = e
 			return
@@ -980,6 +1025,114 @@ func (p *Parser) ParseForBlock(tokens []Token, pos int) (result ForBlockNode, ne
 	newPos = pos
 	return
 }
+func (p *Parser) ParseCaseNode(tokens []Token, pos int) (result CaseNode, newPos int, err error) {
+	// <case> -> <expr> { COMMA <expr> } COLON <alwaysable_statement>
+	expr, pos, err := p.ParseExpression(tokens, pos)
+	if err != nil {
+		return
+	}
+	result.Conditions = append(result.Conditions, expr)
+
+	// get other expressions, optionally
+	potentialPos, e := p.checkToken("case", []string{"comma"}, pos, tokens)
+	for e == nil {
+		pos = potentialPos + 1
+		// get expr
+		expr, pos, err = p.ParseExpression(tokens, pos)
+		if err != nil {
+			return
+		}
+		result.Conditions = append(result.Conditions, expr)
+		potentialPos, e = p.checkToken("case", []string{"comma"}, pos, tokens)
+	}
+
+	// get colon
+	pos, err = p.checkToken("case", []string{"colon"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get alwaysable statement
+	body, potentialPos, e := p.ParseAlwaysStatement(tokens, pos)
+	if e != nil {
+		err = e
+		return
+	}
+	pos = potentialPos
+	result.Statement = body
+	newPos = pos
+	return
+}
+
+// <case_block> -> CASE LPAREN <expr> RPAREN {<case>} [ DEFAULT COLON <alwaysable_statement> ] ENDCASE
+func (p *Parser) ParseCaseBlock(tokens []Token, pos int) (result CaseBlock, newPos int, err error) {
+	// get case
+	pos, err = p.checkToken("case block", []string{"case"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get lparen
+	pos, err = p.checkToken("case block", []string{"lparen"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get expr
+	expr, pos, err := p.ParseExpression(tokens, pos)
+	if err != nil {
+		return
+	}
+	result.Expr = expr
+
+	// get rparen
+	pos, err = p.checkToken("case block", []string{"rparen"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get cases
+	caseNode, potentialPos, e := p.ParseCaseNode(tokens, pos)
+	for e == nil {
+		result.Cases = append(result.Cases, caseNode)
+		pos = potentialPos
+		caseNode, potentialPos, e = p.ParseCaseNode(tokens, pos)
+	}
+
+	// get default, optionally
+	potentialPos, e = p.checkToken("case block", []string{"default"}, pos, tokens)
+	if e == nil {
+		pos = potentialPos + 1
+		// get colon
+		pos, err = p.checkToken("case block", []string{"colon"}, pos, tokens)
+		if err != nil {
+			return
+		}
+		pos++
+		// get alwaysable statement
+		body, potentialPos, e := p.ParseAlwaysStatement(tokens, pos)
+		if e != nil {
+			err = e
+			return
+		}
+		pos = potentialPos
+		result.Default = &body
+	}
+
+	// get endcase
+	pos, err = p.checkToken("case block", []string{"endcase"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	newPos = pos
+	return
+}
 
 func (p *Parser) ParseAlwaysStatement(tokens []Token, pos int) (result AlwaysStatement, newPos int, err error) {
 	// <always_statement> -> <begin_block> | <interior_statement> | <for> | <if> | <builtin_function_call> | <delay_statement>
@@ -1013,7 +1166,13 @@ func (p *Parser) ParseAlwaysStatement(tokens []Token, pos int) (result AlwaysSta
 							result.DelayNode = &delayNode
 							pos = potentialPos
 						} else {
-							err = e
+							caseNode, potentialPos, e := p.ParseCaseBlock(tokens, pos)
+							if e == nil {
+								result.CaseNode = &caseNode
+								pos = potentialPos
+							} else {
+								err = e
+							}
 						}
 					}
 				}
@@ -1668,8 +1827,9 @@ Grammar:
 <arguments> -> <argument> { COMMA <argument> }
 <argument> -> DOT <identifier> LPAREN  <expr>  RPAREN | <expr>
 <selector> -> LBRACKET <expr> [COLON <expr>] RBRACKET
-<expr> -> <sized_value> [OPERATOR <expr>] [ COMPARATOR <expr> [ QUESTION <expr> COLON <expr> ] ]
+<expr> -> <maybe_signed> [OPERATOR <expr>] [ COMPARATOR <expr> [ QUESTION <expr> COLON <expr> ] ]
 			| LPAREN <expr> RPAREN
+<maybed_signed> -> <sized_value> | SIGNED LPAREN <sized_value> RPAREN
 <sized_value> -> [ LITERAL | <identifier> ] LCURL <sized_value> { COMMA <sized_value> } RCURL | <value>
 <value> -> [TILDE| - ] (LITERAL|(<identifier> { DOT <identifier> })|FUNCLITERAL) { <selector> }
 
@@ -1684,8 +1844,10 @@ Grammar:
 <always> -> ALWAYS [ AT LPAREN <event> RPAREN ] <alwaysable_statement>
 <event> -> <time> { OR <time> }
 <time> -> [ TIME ] <identifier>
-<alwaysable_statement> -> <begin_block> | <interior_statement> | <for> | <if> | <builtin_function_call> | <delay_statement>
+<alwaysable_statement> -> <begin_block> | <interior_statement> | <for> | <if> | <builtin_function_call> | <delay_statement> | <case_block>
 <delay_statement> -> POUND [ LITERAL | <identifier> ]
+<case_block> -> CASE LPAREN <expr> RPAREN {<case>} [ DEFAULT COLON <alwaysable_statement> ] ENDCASE
+<case> -> <expr> { COMMA <expr> } COLON <alwaysable_statement>
 
 <initial> -> INITIAL <alwaysable_statement>
 */

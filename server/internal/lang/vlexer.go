@@ -66,6 +66,7 @@ func NewVLexer(logger *zap.Logger) *VLexer {
 	vlexer.AddMappingNoCapture(regexp.MustCompile("^`timescale"), "timescale")
 	// functions that return values (count them as their own type)
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\$time)|(\$realtime))`), "funcliteral")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\$signed)|(\$unsigned))`), "signed")
 	// variable-related
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((reg)|(wire)|(genvar)|(parameter)|(input)|(output)|(inout)|(integer))`), "type")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^defparam`), "defparam")
