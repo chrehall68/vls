@@ -16,6 +16,9 @@ type InteriorNode struct {
 	AssignmentNode        *AssignmentNode
 	ModuleApplicationNode *ModuleApplicationNode
 	GenerateNode          *GenerateNode
+	AlwaysNode            *AlwaysNode
+	DefParamNode          *DefParamNode
+	InitialNode           *InitialNode
 }
 type ModuleNode struct {
 	Identifier Token        // name of module
@@ -32,10 +35,11 @@ type DirectiveNode struct {
 	DefineNode *DefineNode
 }
 type AssignmentNode struct {
-	Identifier Token
-	Index      *IndexNode
-	Value      ExprNode
-	IsAssign   bool
+	Identifier      Token
+	Index           *IndexNode
+	Value           ExprNode
+	IsAssign        bool
+	IsDelayedAssign bool // true if used <= instead of =
 }
 type IndexNode struct {
 	Index ExprNode
@@ -49,6 +53,7 @@ type ValueNode struct {
 	Selectors []SelectorNode
 }
 type SizedValueNode struct {
+	Size   *Token
 	Values []ValueNode
 }
 type DeclarationNode struct {
@@ -80,39 +85,61 @@ type ArgumentNode struct {
 }
 type ExprNode struct {
 	Value      SizedValueNode
-	Operator   *Token
+	Combinator *Token
 	Right      *ExprNode
-	Comparator *Token
-	CompareTo  *ExprNode
 	ExprTrue   *ExprNode
 	ExprFalse  *ExprNode
 }
 type GenerateNode struct {
-	Statements []GenerateableStatement
-}
-type GenerateableStatement struct {
-	BeginBlock   *BeginBlockNode
-	ForBlock     *ForBlockNode
-	IfBlock      *IfBlockNode
-	InteriorNode *InteriorNode
+	Statements []AlwaysStatement
 }
 type BeginBlockNode struct {
-	Statements []GenerateableStatement
+	Statements []AlwaysStatement
 }
 type ForBlockNode struct {
 	Initializer *AssignmentNode
 	Condition   *ExprNode
 	Incrementor *AssignmentNode
-	Body        BeginBlockNode
+	Body        AlwaysStatement
 }
 type IfBlockNode struct {
 	Expr ExprNode
-	Body GenerateableStatement
-	Else *GenerateableStatement
+	Body AlwaysStatement
+	Else *AlwaysStatement
+}
+type AlwaysNode struct {
+	Times     []TimeNode
+	Statement AlwaysStatement
+}
+type AlwaysStatement struct {
+	DelayNode    *DelayNode
+	BeginBlock   *BeginBlockNode
+	ForBlock     *ForBlockNode
+	IfBlock      *IfBlockNode
+	InteriorNode *InteriorNode
+	FunctionNode *FunctionNode
+}
+type TimeNode struct {
+	Time       *Token // negedge, posedge, or nil
+	Identifier Token
+}
+type DelayNode struct {
+	Amount Token
+}
+type FunctionNode struct {
+	Function    Token
+	Expressions []ExprNode
+}
+type DefParamNode struct {
+	Identifiers []Token
+	Value       ExprNode
+}
+type InitialNode struct {
+	Statement AlwaysStatement
 }
 
 func newErrorFrom(from string, expected []string, pos int, tokens []Token) error {
-	return fmt.Errorf("parsing %s, expected %v, got: %v at position %d", from, expected, tokens[pos], pos)
+	return fmt.Errorf("parsing %s, expected %v, got: %v at position %d, have remaining %v", from, expected, tokens[pos], pos, tokens[pos:])
 }
 func (p *Parser) skip(tokens []Token, skippables []string, pos int) int {
 	i := pos
@@ -265,10 +292,10 @@ func (p *Parser) ParseSelectorNode(tokens []Token, pos int) (result SelectorNode
 // <sized_value> -> [ LITERAL ] LCURL <sized_value> { COMMA <sized_value> } RCURL | <value>
 func (p *Parser) parseSized(tokens []Token, pos int) (result SizedValueNode, newPos int, err error) {
 	// seems to be a sized value
-	potentialPos, e := p.checkToken("sized value", []string{"literal"}, pos, tokens)
+	potentialPos, e := p.checkToken("sized value", []string{"literal", "identifier"}, pos, tokens)
 	if e == nil {
-		// there was a size; we'll just ignore it for now
-		// TODO - do something with size?
+		// there was a size
+		result.Size = &tokens[potentialPos]
 		pos = potentialPos + 1
 	}
 
@@ -332,7 +359,20 @@ func (p *Parser) ParseSizedValueNode(tokens []Token, pos int) (result SizedValue
 
 // returned position is the position after the value node
 func (p *Parser) ParseValueNode(tokens []Token, pos int) (result ValueNode, newPos int, err error) {
-	pos, err = p.checkToken("value node", []string{"identifier", "literal"}, pos, tokens)
+	// <value> -> [TILDE| - ] (LITERAL|<identifier>|FUNCLITERAL) { <selector> }
+
+	// get optional tilde or minus
+	potentialPos, e := p.checkToken("value node", []string{"tilde", "operator"}, pos, tokens)
+	if e == nil {
+		// there was some sort of unary operator
+		if tokens[potentialPos].Type == "operator" && tokens[potentialPos].Value != "-" {
+			err = fmt.Errorf("expected tilde or minus but got %s", tokens[potentialPos].Value)
+			return
+		}
+		pos = potentialPos + 1
+	}
+
+	pos, err = p.checkToken("value node", []string{"identifier", "literal", "funcliteral"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -353,8 +393,7 @@ func (p *Parser) ParseValueNode(tokens []Token, pos int) (result ValueNode, newP
 }
 
 func (p *Parser) ParseExpression(tokens []Token, pos int) (result ExprNode, newPos int, err error) {
-	// <expr> -> <value> [OPERATOR <expr>] [ COMPARATOR <expr> [ QUESTION <expr> COLON <expr> ] ]
-	// | LPAREN <expr> RPAREN
+	// <expr> -> (<value> | LPAREN <expr> RPAREN) [(OPERATOR|COMPARATOR) <expr>]  [ QUESTION <expr> COLON <expr> ]
 
 	potentialPos, e := p.checkToken("expression", []string{"lparen"}, pos, tokens)
 	if e == nil {
@@ -371,7 +410,7 @@ func (p *Parser) ParseExpression(tokens []Token, pos int) (result ExprNode, newP
 		}
 		pos++
 	} else {
-		// more complicated expression
+		// just a value
 		value, potentialPos, e := p.ParseSizedValueNode(tokens, pos)
 		if e != nil {
 			err = e
@@ -379,71 +418,56 @@ func (p *Parser) ParseExpression(tokens []Token, pos int) (result ExprNode, newP
 		}
 		pos = potentialPos
 		result.Value = value
-
-		// check for operator
-		potentialPos, e = p.checkToken("expression", []string{"operator"}, pos, tokens)
-		if e == nil {
-			// had an operator
-			pos = potentialPos
-			result.Operator = &tokens[pos]
-			pos++
-
-			// get the right expression
-			tmp, potentialPos, e := p.ParseExpression(tokens, pos)
-			if e != nil {
-				err = e
-				return
-			}
-			result.Right = &tmp
-			pos = potentialPos
-		}
-
-		// check for comparison
-		potentialPos, e = p.checkToken("expression", []string{"comparator"}, pos, tokens)
-		if e == nil {
-			// had a comparator
-			pos = potentialPos
-			result.Comparator = &tokens[pos]
-			pos++
-			tmp, potentialPos, e := p.ParseExpression(tokens, pos)
-			if e != nil {
-				err = e
-				return
-			}
-			result.CompareTo = &tmp
-			pos = potentialPos
-
-			// check for ternary
-			potentialPos, e = p.checkToken("expression", []string{"question"}, pos, tokens)
-			if e == nil {
-				// get the true expression
-				pos = potentialPos + 1
-				tmp, potentialPos, e = p.ParseExpression(tokens, pos)
-				if e != nil {
-					err = e
-					return
-				}
-				result.ExprTrue = &tmp
-				pos = potentialPos
-
-				// need a colon
-				pos, err = p.checkToken("expression", []string{"colon"}, pos, tokens)
-				if err != nil {
-					return
-				}
-				pos++
-
-				// get the false expression
-				tmp, potentialPos, e = p.ParseExpression(tokens, pos)
-				if e != nil {
-					err = e
-					return
-				}
-				result.ExprFalse = &tmp
-				pos = potentialPos
-			}
-		}
 	}
+
+	// check for operator
+	potentialPos, e = p.checkToken("expression", []string{"operator", "comparator"}, pos, tokens)
+	if e == nil {
+		// had an operator or comparator
+		pos = potentialPos
+		result.Combinator = &tokens[pos]
+		pos++
+
+		// get the right expression
+		tmp, potentialPos, e := p.ParseExpression(tokens, pos)
+		if e != nil {
+			err = e
+			return
+		}
+		result.Right = &tmp
+		pos = potentialPos
+	}
+
+	// check for ternary
+	potentialPos, e = p.checkToken("expression", []string{"question"}, pos, tokens)
+	if e == nil {
+		// get the true expression
+		pos = potentialPos + 1
+		tmp, potentialPos, e := p.ParseExpression(tokens, pos)
+		if e != nil {
+			err = e
+			return
+		}
+		result.ExprTrue = &tmp
+		pos = potentialPos
+
+		// need a colon
+		pos, err = p.checkToken("expression", []string{"colon"}, pos, tokens)
+		if err != nil {
+			return
+		}
+		pos++
+
+		// get the false expression
+		tmp, potentialPos, e = p.ParseExpression(tokens, pos)
+		if e != nil {
+			err = e
+			return
+		}
+		result.ExprFalse = &tmp
+		pos = potentialPos
+	}
+
 	newPos = pos
 	return
 }
@@ -611,7 +635,7 @@ func (p *Parser) ParseVariableNode(tokens []Token, pos int) (result VariableNode
 	return
 }
 func (p *Parser) ParseAssignmentNodeWithoutSemicolon(tokens []Token, pos int) (result AssignmentNode, newPos int, err error) {
-	// [ASSIGN] <identifier> [<index>] EQUALS <expr>
+	// [ASSIGN] <identifier> [<index>] (EQUAL|<=) <expr>
 	// TODO - get the expr, not just a value
 	potentialPos, e := p.checkToken("assignment", []string{"assign"}, pos, tokens)
 	// it's ok if it fails since it's optional
@@ -636,9 +660,15 @@ func (p *Parser) ParseAssignmentNodeWithoutSemicolon(tokens []Token, pos int) (r
 	}
 
 	// check for equal
-	pos, err = p.checkToken("assignment", []string{"equal"}, pos, tokens)
+	pos, err = p.checkToken("assignment", []string{"equal", "comparator"}, pos, tokens)
 	if err != nil {
 		return
+	} else if tokens[pos].Type == "comparator" {
+		if tokens[pos].Value != "<=" {
+			err = fmt.Errorf("expected = or <=, got %s", tokens[pos].Value)
+			return
+		}
+		result.IsDelayedAssign = true
 	}
 	pos++
 
@@ -764,7 +794,7 @@ func (p *Parser) ParseBeginBlock(tokens []Token, pos int) (result BeginBlockNode
 	pos++
 
 	// get the generateable statements
-	generateableStatements, potentialPos, e := p.ParseGenerateableStatements(tokens, pos)
+	generateableStatements, potentialPos, e := p.ParseAlwaysStatements(tokens, pos)
 	if e != nil {
 		err = e
 		return
@@ -814,7 +844,7 @@ func (p *Parser) ParseIfBlock(tokens []Token, pos int) (result IfBlockNode, newP
 	pos++
 
 	// get generateable statement
-	generateableStatement, potentialPos, e := p.ParseGenerateableStatement(tokens, pos)
+	generateableStatement, potentialPos, e := p.ParseAlwaysStatement(tokens, pos)
 	if e != nil {
 		err = e
 		return
@@ -826,8 +856,8 @@ func (p *Parser) ParseIfBlock(tokens []Token, pos int) (result IfBlockNode, newP
 	potentialPos, e = p.checkToken("if block", []string{"else"}, pos, tokens)
 	if e == nil {
 		pos = potentialPos + 1
-		// get generateable statement
-		generateableStatement, potentialPos, e := p.ParseGenerateableStatement(tokens, pos)
+		// get always statement
+		generateableStatement, potentialPos, e := p.ParseAlwaysStatement(tokens, pos)
 		if e != nil {
 			err = e
 			return
@@ -890,21 +920,20 @@ func (p *Parser) ParseForBlock(tokens []Token, pos int) (result ForBlockNode, ne
 		return
 	}
 	pos++
-	// get begin_block
-	beginBlock, potentialPos, e := p.ParseBeginBlock(tokens, pos)
+	// get statement
+	body, potentialPos, e := p.ParseAlwaysStatement(tokens, pos)
 	if e != nil {
 		err = e
 		return
 	}
 	pos = potentialPos
-	result.Body = beginBlock
+	result.Body = body
 	newPos = pos
 	return
 }
 
-func (p *Parser) ParseGenerateableStatement(tokens []Token, pos int) (result GenerateableStatement, newPos int, err error) {
-	// <generateable_statements> -> <begin_block> | <interior_statement> | <for> | <if>
-	// TODO - update once we filled out the others
+func (p *Parser) ParseAlwaysStatement(tokens []Token, pos int) (result AlwaysStatement, newPos int, err error) {
+	// <always_statement> -> <begin_block> | <interior_statement> | <for> | <if> | <builtin_function_call> | <delay_statement>
 	beginResult, potentialPos, e := p.ParseBeginBlock(tokens, pos)
 	if e == nil {
 		result.BeginBlock = &beginResult
@@ -925,7 +954,19 @@ func (p *Parser) ParseGenerateableStatement(tokens []Token, pos int) (result Gen
 					result.IfBlock = &ifResult
 					pos = potentialPos
 				} else {
-					err = e
+					functionResult, potentialPos, e := p.ParseBuiltinFunctionCall(tokens, pos)
+					if e == nil {
+						result.FunctionNode = &functionResult
+						pos = potentialPos
+					} else {
+						delayNode, potentialPos, e := p.ParseDelayStatement(tokens, pos)
+						if e == nil {
+							result.DelayNode = &delayNode
+							pos = potentialPos
+						} else {
+							err = e
+						}
+					}
 				}
 			}
 		}
@@ -933,12 +974,12 @@ func (p *Parser) ParseGenerateableStatement(tokens []Token, pos int) (result Gen
 	newPos = pos
 	return
 }
-func (p *Parser) ParseGenerateableStatements(tokens []Token, pos int) (result []GenerateableStatement, newPos int, err error) {
-	generateableStatement, potentialPos, e := p.ParseGenerateableStatement(tokens, pos)
+func (p *Parser) ParseAlwaysStatements(tokens []Token, pos int) (result []AlwaysStatement, newPos int, err error) {
+	generateableStatement, potentialPos, e := p.ParseAlwaysStatement(tokens, pos)
 	for e == nil {
 		result = append(result, generateableStatement)
 		pos = potentialPos
-		generateableStatement, potentialPos, e = p.ParseGenerateableStatement(tokens, pos)
+		generateableStatement, potentialPos, e = p.ParseAlwaysStatement(tokens, pos)
 	}
 	newPos = pos
 	return
@@ -953,7 +994,7 @@ func (p *Parser) ParseGenerate(tokens []Token, pos int) (result GenerateNode, ne
 	pos++
 
 	// get generateable_statements
-	generateableStatements, potentialPos, e := p.ParseGenerateableStatements(tokens, pos)
+	generateableStatements, potentialPos, e := p.ParseAlwaysStatements(tokens, pos)
 	if e != nil {
 		err = e
 		return
@@ -967,6 +1008,270 @@ func (p *Parser) ParseGenerate(tokens []Token, pos int) (result GenerateNode, ne
 		return
 	}
 	pos++
+
+	newPos = pos
+	return
+}
+
+// <time> -> [TIME] <identifier>
+func (p *Parser) ParseTime(tokens []Token, pos int) (result TimeNode, newPos int, err error) {
+	// get time, optionally
+	potentialPos, e := p.checkToken("time", []string{"time"}, pos, tokens)
+	if e == nil {
+		result.Time = &tokens[potentialPos]
+		pos = potentialPos + 1
+	}
+
+	// get identifier
+	pos, err = p.checkToken("time", []string{"identifier"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	result.Identifier = tokens[pos]
+	pos++
+	newPos = pos
+	return
+}
+
+// <event> -> <time> { OR <time> }
+func (p *Parser) ParseEvent(tokens []Token, pos int) (result []TimeNode, newPos int, err error) {
+	// get time
+	timeNode, pos, err := p.ParseTime(tokens, pos)
+	if err != nil {
+		return
+	}
+	result = append(result, timeNode)
+
+	// get other times
+	potentialPos, e := p.checkToken("event", []string{"identifier"}, pos, tokens)
+	for e == nil {
+		// special case because or is technically a valid identifier
+		if tokens[potentialPos].Value != "or" {
+			err = fmt.Errorf("expected 'or' but got '%s'", tokens[potentialPos].Value)
+			return
+		}
+
+		// take the time
+		timeNode, potentialPos, e = p.ParseTime(tokens, potentialPos+1)
+		if e == nil {
+			result = append(result, timeNode)
+			pos = potentialPos
+
+			potentialPos, e = p.checkToken("event", []string{"identifier"}, pos, tokens)
+		} else {
+			err = e
+		}
+	}
+	newPos = pos
+	return
+}
+
+// <delay_statement> -> POUND [ LITERAL | <identifier> ]
+func (p *Parser) ParseDelayStatement(tokens []Token, pos int) (result DelayNode, newPos int, err error) {
+	pos, err = p.checkToken("delay", []string{"pound"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get literal or identifier
+	pos, err = p.checkToken("delay", []string{"literal", "identifier"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	result.Amount = tokens[pos]
+	pos++
+	newPos = pos
+	return
+}
+
+func (p *Parser) ParseAlways(tokens []Token, pos int) (result AlwaysNode, newPos int, err error) {
+	// <always> -> ALWAYS [ AT LPAREN <event> RPAREN ] <alwaysable_statement>
+
+	// get always
+	pos, err = p.checkToken("always", []string{"always"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get at, optionally
+	potentialPos, e := p.checkToken("always", []string{"at"}, pos, tokens)
+	if e == nil {
+		pos = potentialPos + 1
+		// get lparen
+		pos, err = p.checkToken("always", []string{"lparen"}, pos, tokens)
+		if err != nil {
+			return
+		}
+		pos++
+		// get event
+		event, potentialPos, e := p.ParseEvent(tokens, pos)
+		if e != nil {
+			err = e
+			return
+		}
+		pos = potentialPos
+		result.Times = event
+
+		// get rparen
+		pos, err = p.checkToken("always", []string{"rparen"}, pos, tokens)
+		if err != nil {
+			return
+		}
+		pos++
+	}
+
+	// get alwaysable statement
+	alwaysStatement, potentialPos, e := p.ParseAlwaysStatement(tokens, pos)
+	if e != nil {
+		err = e
+		return
+	}
+	result.Statement = alwaysStatement
+	pos = potentialPos
+	newPos = pos
+	return
+}
+
+func (p *Parser) ParseBuiltinFunctionCall(tokens []Token, pos int) (result FunctionNode, newPos int, err error) {
+	// <builtin_function_call> -> DOLLAR <identifier> LPAREN <expr> { COMMA <expr> } RPAREN SEMICOLON
+
+	// get dollar
+	pos, err = p.checkToken("builtin function call", []string{"dollar"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get identifier
+	pos, err = p.checkToken("builtin function call", []string{"identifier"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	result.Function = tokens[pos]
+	pos++
+
+	// get lparen, optionally
+	potentialPos, e := p.checkToken("builtin function call", []string{"lparen"}, pos, tokens)
+	if e == nil {
+		pos = potentialPos + 1
+
+		// get expr
+		expr, potentialPos, e := p.ParseExpression(tokens, pos)
+		if e != nil {
+			err = e
+			return
+		}
+		result.Expressions = append(result.Expressions, expr)
+		pos = potentialPos
+
+		// get any other expressions
+		potentialPos, e = p.checkToken("builtin function call", []string{"comma"}, pos, tokens)
+		for e == nil {
+			// take the expr
+			expr, potentialPos, e = p.ParseExpression(tokens, potentialPos+1)
+			if e == nil {
+				result.Expressions = append(result.Expressions, expr)
+				pos = potentialPos
+			} else {
+				err = e
+				return
+			}
+			potentialPos, e = p.checkToken("builtin function call", []string{"comma"}, pos, tokens)
+		}
+
+		// get rparen
+		pos, err = p.checkToken("builtin function call", []string{"rparen"}, pos, tokens)
+		if err != nil {
+			return
+		}
+		pos++
+	}
+
+	// get semicolon
+	pos, err = p.checkToken("builtin function call", []string{"semicolon"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+	newPos = pos
+	return
+}
+
+func (p *Parser) ParseDefParamNode(tokens []Token, pos int) (result DefParamNode, newPos int, err error) {
+	// <def_param> -> DEFPARAM <identifier> { DOT <identifier> } EQUAL <expr> SEMICOLON
+
+	// get defparam
+	pos, err = p.checkToken("def param", []string{"defparam"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get identifier
+	pos, err = p.checkToken("def param", []string{"identifier"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	result.Identifiers = append(result.Identifiers, tokens[pos])
+	pos++
+
+	// get any other identifiers
+	potentialPos, e := p.checkToken("def param", []string{"dot"}, pos, tokens)
+	for e == nil {
+		// take the identifier
+		pos, err = p.checkToken("def param", []string{"identifier"}, potentialPos+1, tokens)
+		if err != nil {
+			return
+		}
+		result.Identifiers = append(result.Identifiers, tokens[pos])
+		pos++
+		potentialPos, e = p.checkToken("def param", []string{"dot"}, pos, tokens)
+	}
+
+	// get equal
+	pos, err = p.checkToken("def param", []string{"equal"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get expr
+	expr, potentialPos, e := p.ParseExpression(tokens, pos)
+	if e != nil {
+		err = e
+		return
+	}
+	result.Value = expr
+	pos = potentialPos
+
+	// get semicolon
+	pos, err = p.checkToken("def param", []string{"semicolon"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+	newPos = pos
+	return
+}
+
+func (p *Parser) ParseInitial(tokens []Token, pos int) (result InitialNode, newPos int, err error) {
+	// <initial> -> INITIAL <alwaysable_statement>
+	pos, err = p.checkToken("initial", []string{"initial"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	// get alwaysable statement
+	alwaysableStatement, potentialPos, e := p.ParseAlwaysStatement(tokens, pos)
+	if e != nil {
+		err = e
+		return
+	}
+	result.Statement = alwaysableStatement
+	pos = potentialPos
 
 	newPos = pos
 	return
@@ -1002,7 +1307,28 @@ func (p *Parser) ParseInteriorStatement(tokens []Token, pos int) (result Interio
 					result.GenerateNode = &generateNode
 					pos = potentialPos
 				} else {
-					err = e
+					// check if it's an always
+					alwaysNode, potentialPos, e := p.ParseAlways(tokens, pos)
+					if e == nil {
+						result.AlwaysNode = &alwaysNode
+						pos = potentialPos
+					} else {
+						// check if it's a defparam
+						defParamNode, potentialPos, e := p.ParseDefParamNode(tokens, pos)
+						if e == nil {
+							result.DefParamNode = &defParamNode
+							pos = potentialPos
+						} else {
+							// check if it's an initial
+							initialNode, potentialPos, e := p.ParseInitial(tokens, pos)
+							if e == nil {
+								result.InitialNode = &initialNode
+								pos = potentialPos
+							} else {
+								err = e
+							}
+						}
+					}
 				}
 			}
 		}
@@ -1183,9 +1509,16 @@ func (p *Parser) SkipTimescale(tokens []Token, pos int) (newPos int, err error) 
 	newPos = pos
 	return
 }
+
+// <include> -> include <literal>
 func (p *Parser) SkipInclude(tokens []Token, pos int) (newPos int, err error) {
-	// INCLUDE
 	pos, err = p.checkToken("include", []string{"include"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	pos, err = p.checkToken("include", []string{"literal"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1257,7 +1590,7 @@ Grammar:
 // Directive Grammar
 // ==============================
 <directive> -> <include> | <timescale> | <define>
-<include> -> INCLUDE
+<include> -> INCLUDE LITERAL
 <timescale> -> TIMESCALE <non-newline> NEWLINE
 <define> -> DEFINE <identifier> <non-newline> NEWLINE
 
@@ -1269,13 +1602,13 @@ Grammar:
 <ports> -> <identifier> { COMMA <identifier> }
 
 <interior> -> { <interior_statement> }
-<interior_statement>  -> <declaration> | <module_application> | <assignment> | <generate>
+<interior_statement>  -> <declaration> | <module_application> | <assignment> | <generate> | <always> | <defparam> | <initial>
 
-<assignment_without_semicolon> -> [ASSIGN] <identifier> [<index>] EQUALS <expr>
+<assignment_without_semicolon> -> [ASSIGN] <identifier> [<index>] (EQUAL | <=) <expr>
 <assignment> -> <assignment_without_semicolon> SEMICOLON
 <single_var> -> <identifier> [<range>]
 
-<declaration> -> <type> <single_var> [EQUALS <expr>] SEMICOLON
+<declaration> -> <type> <single_var> [EQUAL <expr>] SEMICOLON
 | <type> <single_var> { COMMA <single_var> } SEMICOLON
 <type> -> TYPE [<range>]
 <index> -> LBRACKET <identifier> RBRACKET | LBRACKET <integer> RBRACKET
@@ -1288,12 +1621,22 @@ Grammar:
 <selector> -> LBRACKET <expr> [COLON <expr>] RBRACKET
 <expr> -> <sized_value> [OPERATOR <expr>] [ COMPARATOR <expr> [ QUESTION <expr> COLON <expr> ] ]
 			| LPAREN <expr> RPAREN
-<sized_value> -> [ LITERAL ] LCURL <sized_value> { COMMA <sized_value> } RCURL | <value>
-<value> -> LITERAL { <selector> } | <identifier> { <selector> }
+<sized_value> -> [ LITERAL | <identifier> ] LCURL <sized_value> { COMMA <sized_value> } RCURL | <value>
+<value> -> [TILDE| - ] (LITERAL|<identifier>) { <selector> }
 
-<generate> -> GENERATE { <generateable_statement> } ENDGENERATE
-<generateable_statement> -> <begin_block> | <interior_statement> | <for> | <if>
-<begin_block> -> BEGIN <generateable_statements> END
-<for> -> FOR LPAREN [<assignment_without_semicolon>] SEMICOLON [<expr>] SEMICOLON [<assignment_without_semicolon>] RPAREN <begin_block>
-<if> -> IF LPAREN <expr> RPAREN <generateable_statement> [ELSE <generateable_statement>]
+<defparam> -> DEFPARAM <identifier> { DOT <identifier> } EQUAL <expr> SEMICOLON
+
+<generate> -> GENERATE { <alwaysable_statement> } ENDGENERATE
+<begin_block> -> BEGIN { <alwaysable_statement> } END
+<for> -> FOR LPAREN [<assignment_without_semicolon>] SEMICOLON [<expr>] SEMICOLON [<assignment_without_semicolon>] RPAREN <alwaysable_statement>
+<if> -> IF LPAREN <expr> RPAREN <alwaysable_statement> [ELSE <alwaysable_statement>]
+<builtin_function_call> -> DOLLAR <identifier> [LPAREN <expr> { COMMA <expr> } RPAREN] SEMICOLON
+
+<always> -> ALWAYS [ AT LPAREN <event> RPAREN ] <alwaysable_statement>
+<event> -> <time> { OR <time> }
+<time> -> [ TIME ] <identifier>
+<alwaysable_statement> -> <begin_block> | <interior_statement> | <for> | <if> | <builtin_function_call> | <delay_statement>
+<delay_statement> -> POUND [ LITERAL | <identifier> ]
+
+<initial> -> INITIAL <alwaysable_statement>
 */
