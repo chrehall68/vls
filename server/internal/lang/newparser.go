@@ -49,7 +49,7 @@ type SelectorNode struct {
 	RangeNode *RangeNode
 }
 type ValueNode struct {
-	Value     Token // technically, there could be literals too, but we don't care?
+	Value     []Token
 	Selectors []SelectorNode
 }
 type SizedValueNode struct {
@@ -59,7 +59,7 @@ type SizedValueNode struct {
 type DeclarationNode struct {
 	Type      TypeNode
 	Variables []VariableNode
-	Value     *ExprNode
+	Values    []ExprNode
 }
 type VariableNode struct {
 	Identifier Token
@@ -359,7 +359,7 @@ func (p *Parser) ParseSizedValueNode(tokens []Token, pos int) (result SizedValue
 
 // returned position is the position after the value node
 func (p *Parser) ParseValueNode(tokens []Token, pos int) (result ValueNode, newPos int, err error) {
-	// <value> -> [TILDE| - ] (LITERAL|<identifier>|FUNCLITERAL) { <selector> }
+	// <value> -> [TILDE| - ] (LITERAL|(<identifier> { DOT <identifier> })|FUNCLITERAL) { <selector> }
 
 	// get optional tilde or minus
 	potentialPos, e := p.checkToken("value node", []string{"tilde", "operator"}, pos, tokens)
@@ -377,8 +377,24 @@ func (p *Parser) ParseValueNode(tokens []Token, pos int) (result ValueNode, newP
 		return
 	}
 	// take the value
-	result.Value = tokens[pos]
-	pos++
+	result.Value = append(result.Value, tokens[pos])
+	if tokens[pos].Type == "identifier" {
+		pos++
+		// potentially take the next identifiers
+		potentialPos, e = p.checkToken("value node", []string{"dot"}, pos, tokens)
+		for e == nil {
+			// take the identifier
+			pos, err = p.checkToken("value node", []string{"identifier"}, potentialPos+1, tokens)
+			if err != nil {
+				return
+			}
+			result.Value = append(result.Value, tokens[pos])
+			pos++
+			potentialPos, e = p.checkToken("value node", []string{"dot"}, pos, tokens)
+		}
+	} else {
+		pos++
+	}
 
 	// and any selectors
 	selectorNode, potentialPos, e := p.ParseSelectorNode(tokens, pos)
@@ -724,8 +740,9 @@ func (p *Parser) ParseTypeNode(tokens []Token, pos int) (result TypeNode, newPos
 }
 
 func (p *Parser) ParseDeclarationNode(tokens []Token, pos int) (result DeclarationNode, newPos int, err error) {
-	//<declaration> -> <type> <single_var> [EQUALS <value>] SEMICOLON
-	//    | <type> <single_var> { COMMA <single_var> } SEMICOLON
+	// <declaration> -> <type> <single_var> EQUAL <expr> { COMMA <single_var> EQUAL <expr> } SEMICOLON
+	// | <type> <single_var> { COMMA <single_var> } SEMICOLON
+
 	typeNode, potentialPos, e := p.ParseTypeNode(tokens, pos)
 	if e != nil {
 		err = e
@@ -749,15 +766,47 @@ func (p *Parser) ParseDeclarationNode(tokens []Token, pos int) (result Declarati
 		// it's an equal, so there's a value
 		valueNode, potentialPos, e := p.ParseExpression(tokens, potentialPos+1)
 		if e == nil {
-			// success!
-			result.Value = &valueNode
+			result.Values = append(result.Values, valueNode)
 			pos = potentialPos
 		} else {
 			err = e
 			return
 		}
+
+		// see if there's more variables
+		potentialPos, e = p.checkToken("declaration", []string{"comma"}, pos, tokens)
+		if e == nil {
+			pos = potentialPos
+			// it's a comma, so there's more variables
+			for e == nil {
+				// get var
+				variableNode, pos, err = p.ParseVariableNode(tokens, potentialPos+1)
+				if err != nil {
+					return
+				}
+				result.Variables = append(result.Variables, variableNode)
+
+				// get equal
+				pos, err = p.checkToken("declaration", []string{"equal"}, pos, tokens)
+				if err != nil {
+					return
+				}
+				pos++
+
+				// get value
+				valueNode, pos, err = p.ParseExpression(tokens, pos)
+				if err != nil {
+					return
+				}
+				result.Values = append(result.Values, valueNode)
+
+				// possibly continue
+				potentialPos, e = p.checkToken("declaration", []string{"comma"}, pos, tokens)
+			}
+		}
+
 	} else {
-		// see if it's a comma
+		// see if there's more variables
 		potentialPos, e = p.checkToken("declaration", []string{"comma"}, pos, tokens)
 		if e == nil {
 			pos = potentialPos
@@ -1608,7 +1657,7 @@ Grammar:
 <assignment> -> <assignment_without_semicolon> SEMICOLON
 <single_var> -> <identifier> [<range>]
 
-<declaration> -> <type> <single_var> [EQUAL <expr>] SEMICOLON
+<declaration> -> <type> <single_var> EQUAL <expr> { COMMA <single_var> EQUAL <expr> } SEMICOLON
 | <type> <single_var> { COMMA <single_var> } SEMICOLON
 <type> -> TYPE [<range>]
 <index> -> LBRACKET <identifier> RBRACKET | LBRACKET <integer> RBRACKET
@@ -1622,7 +1671,7 @@ Grammar:
 <expr> -> <sized_value> [OPERATOR <expr>] [ COMPARATOR <expr> [ QUESTION <expr> COLON <expr> ] ]
 			| LPAREN <expr> RPAREN
 <sized_value> -> [ LITERAL | <identifier> ] LCURL <sized_value> { COMMA <sized_value> } RCURL | <value>
-<value> -> [TILDE| - ] (LITERAL|<identifier>) { <selector> }
+<value> -> [TILDE| - ] (LITERAL|(<identifier> { DOT <identifier> })|FUNCLITERAL) { <selector> }
 
 <defparam> -> DEFPARAM <identifier> { DOT <identifier> } EQUAL <expr> SEMICOLON
 

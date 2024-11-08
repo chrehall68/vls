@@ -22,6 +22,7 @@ func NewVLexer(logger *zap.Logger) *VLexer {
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^[\r\n]+`), "newline")
 	// comments
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\/\/.*`), "comment")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`(?s)^\/\*.*\*\/`), "comment")
 	// keywords
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^module`), "module")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^endmodule`), "endmodule")
@@ -77,8 +78,8 @@ func NewVLexer(logger *zap.Logger) *VLexer {
 		}
 		return Token{Type: "identifier", Value: matches[re.SubexpIndex("IDENTIFIER")]}, nil
 	})
-	vlexer.AddMapping(regexp.MustCompile(`^(([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|([0-9]+)|(\"[^\n]*\"))`), func(code string) (Token, error) {
-		re := regexp.MustCompile(`^(?P<LITERAL>(([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|([0-9]+)|(\"[^\n]*\")))`)
+	vlexer.AddMapping(regexp.MustCompile(`^(([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|([0-9]+)|(\"[^\n\"]*\"))`), func(code string) (Token, error) {
+		re := regexp.MustCompile(`^(?P<LITERAL>(([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|([0-9]+)|(\"[^\n\"]*\")))`)
 		matches := re.FindStringSubmatch(code)
 		if len(matches) == 0 {
 			return Token{}, errors.New("failed to parse literal" + code)
