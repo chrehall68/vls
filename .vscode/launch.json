@@ -28,7 +28,7 @@
 			"preLaunchTask": {
 				"type": "npm",
 				"path": "client",
-				"script": "watch",
+				"script": "compile",
 			},
 		}
 	],
