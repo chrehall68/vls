@@ -5,17 +5,20 @@ import (
 	"strings"
 
 	"github.com/chrehall68/vls/internal/lang"
+	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
 	"go.uber.org/zap"
 )
 
 type ServerState struct {
 	workspace string
-	modules   map[string][]lang.Module     // list of all modules, grouped by file (w/o the file://)
-	defines   map[string][]lang.Define     // list of all defines, grouped by file (w/o the file://)
+	modules   map[string][]lang.ModuleNode // list of all modules, grouped by file (w/o the file://)
+	defines   map[string][]lang.DefineNode // list of all defines, grouped by file (w/o the file://)
 	symbolMap map[string]protocol.Location // map of symbol names to their location (path w/ the file://)
 	files     map[string]*File             // map of file names (w/o the file://) to corresponding File objects
 	log       *zap.Logger
+	stream    *jsonrpc2.Stream
+	client    protocol.Client
 }
 
 type Handler struct {
@@ -27,7 +30,7 @@ func (h Handler) String() string {
 	return "vlsp"
 }
 
-func NewHandler(ctx context.Context, server protocol.Server, logger *zap.Logger) (Handler, context.Context, error) {
+func NewHandler(ctx context.Context, server protocol.Server, client protocol.Client, logger *zap.Logger, stream *jsonrpc2.Stream) (Handler, context.Context, error) {
 	// Do initialization logic here, including
 	// stuff like setting state variables
 	// by returning a new context with
@@ -37,9 +40,11 @@ func NewHandler(ctx context.Context, server protocol.Server, logger *zap.Logger)
 		Server: server,
 		state: &ServerState{
 			workspace: "",
-			modules:   map[string][]lang.Module{},
-			defines:   map[string][]lang.Define{},
+			modules:   map[string][]lang.ModuleNode{},
+			defines:   map[string][]lang.DefineNode{},
 			log:       logger,
+			stream:    stream,
+			client:    client,
 			files:     map[string]*File{}}}, ctx, nil
 }
 

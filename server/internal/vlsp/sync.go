@@ -16,7 +16,7 @@ func (h Handler) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 		h.state.files[file].SetContents(params.ContentChanges[len(params.ContentChanges)-1].Text)
 
 		// update symbols
-		h.GetSymbolsForFile(file)
+		h.GetSymbolsForFile(file, false)
 	}
 	return
 }
@@ -29,7 +29,7 @@ func (h Handler) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocume
 		h.state.files[file].SetContents(params.TextDocument.Text)
 
 		// update symbols
-		h.GetSymbolsForFile(file)
+		h.GetSymbolsForFile(file, false)
 	}
 	return
 }
@@ -48,7 +48,7 @@ func (h Handler) DidSave(ctx context.Context, params *protocol.DidSaveTextDocume
 		h.state.files[file].Save()
 
 		// update symbols
-		h.GetSymbolsForFile(file)
+		h.GetSymbolsForFile(file, false)
 	}
 	return
 }

@@ -1,6 +1,7 @@
 package vlsp
 
 import (
+	"context"
 	"os"
 	"strings"
 
@@ -24,7 +25,7 @@ func (h *Handler) getFileFullPaths(dir string) []string {
 	return paths
 }
 
-func (h Handler) GetSymbolsForFile(fname string) {
+func (h Handler) GetSymbolsForFile(fname string, firstTime bool) {
 	vlexer := lang.NewVLexer(h.state.log)
 	parser := lang.NewParser()
 
@@ -36,38 +37,62 @@ func (h Handler) GetSymbolsForFile(fname string) {
 	}
 
 	// parse
-	results, err := parser.Parse(tokens)
+	results, err := parser.ParseFile(tokens)
 	if err != nil {
 		h.state.log.Sugar().Errorf("error parsing file %s: %s", fname, err)
-		h.state.defines[fname] = []lang.Define{}
-		h.state.modules[fname] = []lang.Module{}
-	} else {
-		h.state.modules[fname] = results.Modules
-		h.state.defines[fname] = results.Defines
+		h.state.defines[fname] = []lang.DefineNode{}
+		h.state.modules[fname] = []lang.ModuleNode{}
 
-		for _, module := range results.Modules {
-			h.state.symbolMap[module.Name] = protocol.Location{
-				URI: protocol.DocumentURI("file://" + fname),
-				Range: protocol.Range{
-					Start: protocol.Position{Line: uint32(module.Token.Line()), Character: uint32(module.Token.StartCharacter())},
-					End:   protocol.Position{Line: uint32(module.Token.Line()), Character: uint32(module.Token.EndCharacter())}},
+		// publish no diagnostics since stuff failed
+		obj := protocol.PublishDiagnosticsParams{
+			URI:         protocol.DocumentURI("file://" + fname),
+			Diagnostics: []protocol.Diagnostic{},
+		}
+		h.state.client.PublishDiagnostics(context.Background(), &obj)
+	} else {
+		for _, statement := range results.Statements {
+			if statement.Module != nil {
+				h.state.modules[fname] = append(h.state.modules[fname], *statement.Module)
+			} else if statement.Directive != nil && statement.Directive.DefineNode != nil {
+				h.state.defines[fname] = append(h.state.defines[fname], *statement.Directive.DefineNode)
 			}
 		}
-		for _, define := range results.Defines {
-			h.state.symbolMap[define.Name] = protocol.Location{
+
+		for _, module := range h.state.modules[fname] {
+			h.state.symbolMap[module.Identifier.Value] = protocol.Location{
 				URI: protocol.DocumentURI("file://" + fname),
 				Range: protocol.Range{
-					Start: protocol.Position{Line: uint32(define.Token.Line()), Character: uint32(define.Token.StartCharacter())},
-					End:   protocol.Position{Line: uint32(define.Token.Line()), Character: uint32(define.Token.EndCharacter())}},
+					Start: protocol.Position{Line: uint32(module.Identifier.Line()), Character: uint32(module.Identifier.StartCharacter())},
+					End:   protocol.Position{Line: uint32(module.Identifier.Line()), Character: uint32(module.Identifier.EndCharacter())}},
 			}
+		}
+		for _, define := range h.state.defines[fname] {
+			h.state.symbolMap[define.Identifier.Value] = protocol.Location{
+				URI: protocol.DocumentURI("file://" + fname),
+				Range: protocol.Range{
+					Start: protocol.Position{Line: uint32(define.Identifier.Line()), Character: uint32(define.Identifier.StartCharacter())},
+					End:   protocol.Position{Line: uint32(define.Identifier.Line()), Character: uint32(define.Identifier.EndCharacter())}},
+			}
+
+		}
+
+		// get diagnostics
+		if !firstTime {
+			interpreter := lang.NewInterpreter(h.state.log, h.state.modules, h.state.defines)
+			diagnostics := interpreter.Interpret(results)
+			obj := protocol.PublishDiagnosticsParams{
+				URI:         protocol.DocumentURI("file://" + fname),
+				Diagnostics: diagnostics,
+			}
+			h.state.client.PublishDiagnostics(context.Background(), &obj)
 		}
 	}
 }
 
 func (h Handler) GetSymbols() {
 	// first, reset state
-	h.state.defines = map[string][]lang.Define{}
-	h.state.modules = map[string][]lang.Module{}
+	h.state.defines = map[string][]lang.DefineNode{}
+	h.state.modules = map[string][]lang.ModuleNode{}
 	h.state.symbolMap = map[string]protocol.Location{}
 
 	// then, get the files to parse
@@ -79,7 +104,37 @@ func (h Handler) GetSymbols() {
 			h.state.files[file] = NewFile(file)
 
 			// parse the file
-			h.GetSymbolsForFile(file)
+			h.GetSymbolsForFile(file, true)
+
+			// clear any existing diagnostics
+			obj := protocol.PublishDiagnosticsParams{
+				URI:         protocol.DocumentURI("file://" + file),
+				Diagnostics: []protocol.Diagnostic{},
+			}
+			h.state.client.PublishDiagnostics(context.Background(), &obj)
+		}
+	}
+
+	// then publish actual diagnostics
+	vlexer := lang.NewVLexer(h.state.log)
+	parser := lang.NewParser()
+	for _, file := range files {
+		if strings.HasSuffix(file, ".v") {
+			tokens, err := vlexer.Lex(h.state.files[file].GetContents())
+			if err != nil {
+				continue
+			}
+			results, err := parser.ParseFile(tokens)
+			if err != nil {
+				continue
+			}
+			interpreter := lang.NewInterpreter(h.state.log, h.state.modules, h.state.defines)
+			diagnostics := interpreter.Interpret(results)
+			obj := protocol.PublishDiagnosticsParams{
+				URI:         protocol.DocumentURI("file://" + file),
+				Diagnostics: diagnostics,
+			}
+			h.state.client.PublishDiagnostics(context.Background(), &obj)
 		}
 	}
 }
