@@ -9,7 +9,7 @@
 			"mode": "auto",
 			"program": "${workspaceFolder}/server",
 			"args": [
-				"--listen-at=localhost:60256",
+				"--listen-at=localhost:60256", // match VLS_PORT env var defined below
 			],
 		},
 		{
@@ -18,6 +18,9 @@
 			"name": "Launch Client",
 			"runtimeExecutable": "${execPath}",
 			"args": ["--extensionDevelopmentPath=${workspaceRoot}"],
+			"env": {
+				"VLS_PORT": "60256",
+			},
 			"outFiles": [
 				"${workspaceRoot}/client/out/**/*.js",
 				//"${workspaceRoot}/server/out/**/*.js"
