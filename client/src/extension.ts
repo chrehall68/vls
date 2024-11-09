@@ -22,7 +22,7 @@ function getServerOptions(ctx: ExtensionContext): ServerOptions {
     // We need to connect to it with a socket because it's not a child process, no easy way to get its stdin/stdout (on linux, reading /proc/<pid>/0 and 1 is doable, but that's not cross platform) 
     const connectionInfo = {
       host: "localhost",
-      port: parseInt(ctx.environmentVariableCollection.get("VLS_PORT").value),
+      port: 60256,
     };
     return () => {
       const sock = net.connect(connectionInfo);
