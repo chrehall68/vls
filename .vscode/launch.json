@@ -11,6 +11,7 @@
 			"output": "${workspaceFolder}/server/out/verilog_language_server",
 			"args": [
 				"--listen-at=localhost:60256",
+				"--log-console",
 			],
 		},
 		{

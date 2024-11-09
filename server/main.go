@@ -10,56 +10,63 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func logInit(debug bool, f *os.File) *zap.Logger {
-
+func logConfig() zapcore.EncoderConfig {
 	pe := zap.NewProductionEncoderConfig()
-
-	fileEncoder := zapcore.NewJSONEncoder(pe)
-
 	pe.EncodeTime = zapcore.ISO8601TimeEncoder // The encoder can be customized for each output
+	return pe
+}
 
-	level := zap.InfoLevel
-	if debug {
-		level = zap.DebugLevel
-	}
+func structuredLogCore(level zapcore.Level, f *os.File) zapcore.Core {
+	config := logConfig()
+	encoder := zapcore.NewJSONEncoder(config)
 
-	core := zapcore.NewTee(
-		zapcore.NewCore(fileEncoder, zapcore.AddSync(f), level),
-	)
+	return zapcore.NewCore(encoder, zapcore.AddSync(f), level)
+}
 
-	l := zap.New(core) //Creating the logger
+func consoleLogCore(level zapcore.Level) zapcore.Core {
+	config := logConfig()
+	encoder := zapcore.NewConsoleEncoder(config)
 
-	return l
+	return zapcore.NewCore(encoder, zapcore.AddSync(os.Stdout), level)
 }
 
 func main() {
+	logToFile := flag.String("log-file", "", "If specified, output JSON structured log to this file.")
+	logToConsole := flag.Bool("log-console", false, "If true and --listen-at is specified, output console log.")
 	listenAt := flag.String("listen-at", "", "If specified (not empty string), listen at this address for a TCP connection instead of talking over stdio.")
 	flag.Parse()
 
-	if *listenAt != "" {
-		logger := logInit(true, os.Stdout)
-		sweet := logger.Sugar()
+	level := zapcore.DebugLevel
 
+	cores := []zapcore.Core{}
+	if *logToConsole && *listenAt != "" {
+		cores = append(cores, consoleLogCore(level))
+	}
+	if *logToFile != "" {
+		outputFile, _ := os.OpenFile("server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		cores = append(cores, structuredLogCore(level, outputFile))
+	}
+
+	logger := zap.New(zapcore.NewTee(cores...))
+	sugar := logger.Sugar()
+
+	if *listenAt != "" {
 		listen, err := net.Listen("tcp", *listenAt)
 		if err != nil {
 			// Use %v to get a human facing error message
-			sweet.Fatalf("listen-at '%s': %v", *listenAt, err)
+			sugar.Fatalf("listen-at '%s': %v", *listenAt, err)
 			os.Exit(-1)
 		}
 
 		for {
 			conn, err := listen.Accept()
 			if err != nil {
-				sweet.Errorf("listen-at: accept: %v", err)
+				sugar.Errorf("listen-at: accept: %v", err)
 			}
 
 			vlsp.StartServer(logger, conn, conn)
 		}
 	} else {
-		outputFile, _ := os.OpenFile("server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-
-		logger := logInit(true, outputFile)
-
 		vlsp.StartServer(logger, os.Stdin, os.Stdout)
 	}
 }
