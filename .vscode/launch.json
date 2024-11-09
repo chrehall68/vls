@@ -31,6 +31,10 @@
 	"compounds": [
 		{
 			"name": "VLS",
+			// NOTE: synchronization issue
+			//   the extension expects to be able to immediately connect to the specified port without a mechanism to wait for server fully starts
+			//   this works because VSCode spends around 1 second to initialize, before loading extensions
+			//   if VSCode gets any faster it might be a problem
 			"configurations": ["Launch Server", "Launch Client"],
 		}
 	]

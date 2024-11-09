@@ -67,13 +67,14 @@ export function activate(ctx: ExtensionContext) {
 
   // Create the language client and start the client.
   client = new LanguageClient(
-    "languageServerExample",
-    "Language Server Example",
+    "verilogLS",
+    "Verilog Language Server",
     serverOptions,
     clientOptions
   );
 
-  // Start the client. This will also launch the server
+  // If serverOptions specified a node module or an executable, it will be started automatically
+  // If serverOptions is a callback, it will be run to get a connection
   console.log("Starting client");
   client.start();
 }
