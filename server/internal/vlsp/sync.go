@@ -13,7 +13,12 @@ func (h Handler) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 
 	if strings.HasSuffix(file, ".v") {
 		// update file
-		h.state.files[file].SetContents(params.ContentChanges[len(params.ContentChanges)-1].Text)
+		fnode, ok := h.state.files[file]
+		if !ok {
+			h.state.files[file] = NewFile(file)
+			fnode = h.state.files[file]
+		}
+		fnode.SetContents(params.ContentChanges[len(params.ContentChanges)-1].Text)
 
 		// update symbols
 		h.GetSymbolsForFile(file, false)
@@ -26,7 +31,12 @@ func (h Handler) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocume
 
 	if strings.HasSuffix(file, ".v") {
 		// update file
-		h.state.files[file].SetContents(params.TextDocument.Text)
+		fnode, ok := h.state.files[file]
+		if !ok {
+			h.state.files[file] = NewFile(file)
+			fnode = h.state.files[file]
+		}
+		fnode.SetContents(params.TextDocument.Text)
 
 		// update symbols
 		h.GetSymbolsForFile(file, false)
