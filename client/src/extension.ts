@@ -44,16 +44,7 @@ export function activate(ctx: ExtensionContext) {
 
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
-    // Register the server for plain text documents
     documentSelector: [
-      {
-        language: "go",
-        scheme: "file",
-      },
-      {
-        language: "plaintext",
-        scheme: "file",
-      },
       {
         language: "verilog",
         scheme: "file",
