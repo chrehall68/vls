@@ -7,6 +7,10 @@
 		"rootDir": "src",
 		"sourceMap": true
 	},
-	"include": ["src"],
-	"exclude": ["node_modules", ".vscode-test"]
+	"include": [
+		"src"
+	],
+	"exclude": [
+		"node_modules"
+	]
 }

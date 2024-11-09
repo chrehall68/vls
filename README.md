@@ -22,7 +22,7 @@ Roadmap Features:
 ## Run in Development Environment
 
 - Clone this repository
-- Run `npm install` in the repo. This installs all necessary npm modules in both the client and server folder.
+- Run `npm install` in `client/`. This installs all necessary npm modules.
 - Open the repo in VS Code
 - Switch to the Run and Debug View in the Sidebar (shortcut: <kbd>Ctrl+Shift+D</kbd>)
 - Select `VLS` from the drop down

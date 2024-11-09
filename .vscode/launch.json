@@ -27,8 +27,9 @@
 			],
 			"preLaunchTask": {
 				"type": "npm",
-				"script": "watch"
-			}
+				"path": "client",
+				"script": "watch",
+			},
 		}
 	],
 	"compounds": [
