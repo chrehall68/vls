@@ -8,6 +8,7 @@
 			"request": "launch",
 			"mode": "auto",
 			"program": "${workspaceFolder}/server",
+			"output": "${workspaceFolder}/server/out/verilog_language_server",
 			"args": [
 				"--listen-at=localhost:60256",
 			],
@@ -17,10 +18,11 @@
 			"request": "launch",
 			"name": "Launch Client",
 			"runtimeExecutable": "${execPath}",
-			"args": ["--extensionDevelopmentPath=${workspaceRoot}"],
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}"
+			],
 			"outFiles": [
-				"${workspaceRoot}/client/out/**/*.js",
-				//"${workspaceRoot}/server/out/**/*.js"
+				"${workspaceFolder}/client/out/**/*.js",
 			],
 			"preLaunchTask": {
 				"type": "npm",
