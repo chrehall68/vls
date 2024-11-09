@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"net"
 	"os"
 
 	"github.com/chrehall68/vls/internal/vlsp"
@@ -31,10 +33,33 @@ func logInit(debug bool, f *os.File) *zap.Logger {
 }
 
 func main() {
-	outputFile, _ := os.OpenFile("server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	listenAt := flag.String("listen-at", "", "If specified (not empty string), listen at this address for a TCP connection instead of talking over stdio.")
+	flag.Parse()
 
-	logger := logInit(true, outputFile)
+	if *listenAt != "" {
+		logger := logInit(true, os.Stdout)
+		sweet := logger.Sugar()
 
-	// Start the server
-	vlsp.StartServer(logger)
+		listen, err := net.Listen("tcp", *listenAt)
+		if err != nil {
+			// Use %v to get a human facing error message
+			sweet.Fatalf("listen-at '%s': %v", *listenAt, err)
+			os.Exit(-1)
+		}
+
+		for {
+			conn, err := listen.Accept()
+			if err != nil {
+				sweet.Errorf("listen-at: accept: %v", err)
+			}
+
+			vlsp.StartServer(logger, conn, conn)
+		}
+	} else {
+		outputFile, _ := os.OpenFile("server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+		logger := logInit(true, outputFile)
+
+		vlsp.StartServer(logger, os.Stdin, os.Stdout)
+	}
 }

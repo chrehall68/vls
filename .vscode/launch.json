@@ -3,6 +3,16 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "Launch Server",
+			"type": "go",
+			"request": "launch",
+			"mode": "auto",
+			"program": "${workspaceFolder}/server",
+			"args": [
+				"--listen-at=localhost:60256",
+			],
+		},
+		{
 			"type": "extensionHost",
 			"request": "launch",
 			"name": "Launch Client",
@@ -17,6 +27,12 @@
 				"type": "npm",
 				"script": "watch"
 			}
+		}
+	],
+	"compounds": [
+		{
+			"name": "VLS",
+			"configurations": ["Launch Server", "Launch Client"],
 		}
 	]
 }
