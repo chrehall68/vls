@@ -28,10 +28,11 @@ func GetSemanticTokensOptions() SemanticTokensOptions {
 	return SemanticTokensOptions{
 		Legend: protocol.SemanticTokensLegend{
 			TokenTypes: []protocol.SemanticTokenTypes{
-				protocol.SemanticTokenType,    // 0
-				protocol.SemanticTokenComment, // 1
-				protocol.SemanticTokenNumber,  // 2
-				protocol.SemanticTokenMacro,   // 3
+				protocol.SemanticTokenType,     // 0
+				protocol.SemanticTokenComment,  // 1
+				protocol.SemanticTokenNumber,   // 2
+				protocol.SemanticTokenMacro,    // 3
+				protocol.SemanticTokenVariable, // 4
 			},
 			TokenModifiers: []protocol.SemanticTokenModifiers{},
 		},
@@ -68,6 +69,7 @@ func Encode(tokens []lang.Token) []uint32 {
 		"initial":     3,
 		"time":        3,
 		"default":     3,
+		"identifier":  4,
 	}
 
 	addToken := func(token lang.Token) {

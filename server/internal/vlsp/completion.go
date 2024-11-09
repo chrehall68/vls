@@ -22,18 +22,18 @@ func (h Handler) Completion(ctx context.Context, params *protocol.CompletionPara
 	for _, defines := range h.state.defines {
 		for _, define := range defines {
 			completionItems = append(completionItems, protocol.CompletionItem{
-				Label:      "`" + define.Name,
+				Label:      "`" + define.Identifier.Value,
 				Detail:     "define",
-				InsertText: "`" + define.Name,
+				InsertText: "`" + define.Identifier.Value,
 			})
 		}
 	}
 	for _, modules := range h.state.modules {
 		for _, module := range modules {
 			completionItems = append(completionItems, protocol.CompletionItem{
-				Label:      module.Name,
+				Label:      module.Identifier.Value,
 				Detail:     "module",
-				InsertText: module.Name,
+				InsertText: module.Identifier.Value,
 			})
 		}
 	}

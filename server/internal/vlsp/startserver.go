@@ -14,15 +14,18 @@ import (
 // StartServer starts the language server.
 // It reads from stdin and writes to stdout.
 func StartServer(logger *zap.Logger) {
-	conn := jsonrpc2.NewConn(jsonrpc2.NewStream(&readWriteCloser{
+	stream := jsonrpc2.NewStream(&readWriteCloser{
 		reader: os.Stdin,
 		writer: os.Stdout,
-	}))
+	})
+	conn := jsonrpc2.NewConn(stream)
 
 	handler, ctx, err := NewHandler(
 		context.Background(),
 		protocol.ServerDispatcher(conn, logger),
+		protocol.ClientDispatcher(conn, logger),
 		logger,
+		&stream,
 	)
 
 	if err != nil {

@@ -100,7 +100,7 @@ func (l *Lexer) Lex(code string) ([]Token, error) {
 		token, err := f(code[i : i+maxLength])
 		if err == nil { // don't add empty tokens
 			token.startCharacter = i - lineStart
-			token.endCharacter = i + maxLength - 1 - lineStart
+			token.endCharacter = i + maxLength - lineStart
 			token.line = line
 			tokens = append(tokens, token)
 		} else {

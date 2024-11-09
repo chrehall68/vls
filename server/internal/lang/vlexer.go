@@ -22,6 +22,7 @@ func NewVLexer(logger *zap.Logger) *VLexer {
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^[\r\n]+`), "newline")
 	// comments
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\/\/.*`), "comment")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`(?s)^\/\*.*\*\/`), "comment")
 	// keywords
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^module`), "module")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^endmodule`), "endmodule")
@@ -36,12 +37,13 @@ func NewVLexer(logger *zap.Logger) *VLexer {
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^else`), "else")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^assign`), "assign")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^initial`), "initial")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^always`), "always")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((negedge)|(posedge))`), "time")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^default`), "default")
 	// comparisons/assignments
-	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\=\=)|(\!\=)|(\<\=)|(>\=)|\>|\<|(\=\=\=)|(\!\-\=))`), "comparator")
-	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\&\&)|(\|\|))`), "logical_operator")
-	vlexer.AddMappingNoCapture(regexp.MustCompile(`^[\+\-\*\/\|&]`), "operator")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\=\=\=)|(\!\=\=)|(\=\=)|(\!\=)|(\<\=)|(>\=)|\>|\<)`), "comparator")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\&\&)|(\|\|)|[\+\-\*\/\|&]|(\<\<)|(\>\>))`), "operator") // binary operators
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\~`), "tilde")                                             // the only unary operator
 	// symbols
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\(`), "lparen")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\)`), "rparen")
@@ -55,18 +57,19 @@ func NewVLexer(logger *zap.Logger) *VLexer {
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\;`), "semicolon")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\?`), "question")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\@`), "at")
-	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\=+`), "equal")
-	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\~`), "tilde")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\=`), "equal")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\#`), "pound")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^\$`), "dollar")
 	// other
-	vlexer.AddMappingNoCapture(regexp.MustCompile("^`include.+"), "include")
+	vlexer.AddMappingNoCapture(regexp.MustCompile("^`include"), "include")
 	vlexer.AddMappingNoCapture(regexp.MustCompile("^`define"), "define")
 	vlexer.AddMappingNoCapture(regexp.MustCompile("^`timescale"), "timescale")
-	vlexer.AddMapping(regexp.MustCompile(`^\$.*`), func(code string) (Token, error) {
-		return Token{Type: "unknown", Value: code}, nil
-	})
+	// functions that return values (count them as their own type)
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\$time)|(\$realtime))`), "funcliteral")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\$signed)|(\$unsigned))`), "signed")
 	// variable-related
-	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((reg)|(wire)|(genvar)|(parameter)|(input)|(output)|(defparam))`), "type")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((reg)|(wire)|(genvar)|(parameter)|(input)|(output)|(inout)|(integer))`), "type")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^defparam`), "defparam")
 	vlexer.AddMapping(regexp.MustCompile("^`?[A-Za-z][a-zA-Z0-9_]*"), func(code string) (Token, error) {
 		re := regexp.MustCompile("^`?(?P<IDENTIFIER>[A-Za-z][a-zA-Z0-9_]*)")
 		matches := re.FindStringSubmatch(code)
@@ -76,8 +79,8 @@ func NewVLexer(logger *zap.Logger) *VLexer {
 		}
 		return Token{Type: "identifier", Value: matches[re.SubexpIndex("IDENTIFIER")]}, nil
 	})
-	vlexer.AddMapping(regexp.MustCompile(`^(([0-9]+)|([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|(\"[^\s]*\"))`), func(code string) (Token, error) {
-		re := regexp.MustCompile(`^(?P<LITERAL>(([0-9]+)|([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|(\"[^\s]*\")))`)
+	vlexer.AddMapping(regexp.MustCompile(`^(([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|([0-9]+)|(\"[^\n\"]*\"))`), func(code string) (Token, error) {
+		re := regexp.MustCompile(`^(?P<LITERAL>(([0-9]*\'[hbd][0-9xzXZA-Fa-f]+)|([0-9]+)|(\"[^\n\"]*\")))`)
 		matches := re.FindStringSubmatch(code)
 		if len(matches) == 0 {
 			return Token{}, errors.New("failed to parse literal" + code)
