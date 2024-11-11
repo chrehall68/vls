@@ -3,20 +3,43 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "Launch Server",
+			"type": "go",
+			"request": "launch",
+			"mode": "auto",
+			"program": "${workspaceFolder}/server",
+			"output": "${workspaceFolder}/server/out/verilog_language_server",
+			"args": [
+				"--listen-at=localhost:60256",
+				"--log-console",
+			],
+		},
+		{
 			"type": "extensionHost",
 			"request": "launch",
 			"name": "Launch Client",
 			"runtimeExecutable": "${execPath}",
-			"args": ["--extensionDevelopmentPath=${workspaceRoot}"],
-			"outFiles": [
-				"${workspaceRoot}/client/out/**/*.js",
-				//"${workspaceRoot}/server/out/**/*.js"
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}"
 			],
-			"autoAttachChildProcesses": true,
+			"outFiles": [
+				"${workspaceFolder}/client/out/**/*.js",
+			],
 			"preLaunchTask": {
 				"type": "npm",
-				"script": "watch"
-			}
+				"path": "client",
+				"script": "compile",
+			},
+		}
+	],
+	"compounds": [
+		{
+			"name": "VLS",
+			// NOTE: synchronization issue
+			//   the extension expects to be able to immediately connect to the specified port without a mechanism to wait for server fully starts
+			//   this works because VSCode spends around 1 second to initialize, before loading extensions
+			//   if VSCode gets any faster it might be a problem
+			"configurations": ["Launch Server", "Launch Client"],
 		}
 	]
 }

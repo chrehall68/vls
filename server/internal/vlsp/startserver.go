@@ -3,7 +3,6 @@ package vlsp
 import (
 	"context"
 	"io"
-	"os"
 
 	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
@@ -13,10 +12,10 @@ import (
 
 // StartServer starts the language server.
 // It reads from stdin and writes to stdout.
-func StartServer(logger *zap.Logger) {
+func StartServer(logger *zap.Logger, reader io.ReadCloser, writer io.WriteCloser) {
 	stream := jsonrpc2.NewStream(&readWriteCloser{
-		reader: os.Stdin,
-		writer: os.Stdout,
+		reader: reader,
+		writer: writer,
 	})
 	conn := jsonrpc2.NewConn(stream)
 
