@@ -2,6 +2,8 @@ package vlsp
 
 import (
 	"os"
+	"runtime"
+	"strings"
 )
 
 // File represents a file, either on disk or in memory
@@ -39,4 +41,25 @@ func (f *File) SetContents(contents string) {
 func (f *File) Save() {
 	f.savedOnDisk = true
 	f.contents = ""
+}
+
+func URIToPath(uri string) string {
+	os := runtime.GOOS
+	uri = strings.TrimPrefix(uri, "file://")
+
+	// make sure to handle windows case
+	if os == "windows" {
+		// it's windows
+		uri = strings.ReplaceAll(uri, "%3A", ":")
+		// and also strip leading /
+		uri = uri[1:]
+	}
+	return uri
+}
+func PathToURI(path string) string {
+	os := runtime.GOOS
+	if os == "windows" {
+		return "file:///" + path // need to add the leading / again
+	}
+	return "file://" + path
 }

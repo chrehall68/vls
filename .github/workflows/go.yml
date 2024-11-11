@@ -1,0 +1,46 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.20"
+
+      - name: Build
+        run: |
+          cd server
+          GOOS=linux GOARCH=amd64 go build -o linux/vls
+          GOOS=windows GOARCH=amd64 go build -o windows/vls.exe
+          GOOS=darwin GOARCH=amd64 go build -o macos/vls
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: vls-linux-amd64
+          path: server/linux/vls
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: vls-windows-amd64
+          path: server/windows/vls.exe
+
+      - name: Upload Darwin Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: vls-darwin-amd64
+          path: server/macos/vls

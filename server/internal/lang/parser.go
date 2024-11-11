@@ -620,7 +620,9 @@ func (p *Parser) ParseArguments(tokens []Token, pos int) (result []ArgumentNode,
 			result = append(result, argument)
 			pos = potentialPos
 		} else {
-			// TODO - something went wrong, should we stop here or try to keep going?
+			// something went wrong, return an error
+			err = e
+			return
 		}
 		potentialPos, e = p.checkToken("arguments", []string{"comma"}, pos, tokens)
 	}

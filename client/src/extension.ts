@@ -4,22 +4,74 @@
  * ------------------------------------------------------------------------------------------ */
 
 import { ExtensionContext, ExtensionMode, workspace } from "vscode";
-import { resolve } from "path";
 
+import { createWriteStream, existsSync, mkdirSync } from "fs";
+import { chmod } from "fs/promises";
+import * as net from "net";
+import { Readable } from "stream";
+import { finished } from "stream/promises";
 import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
   StreamInfo,
 } from "vscode-languageclient/node";
-import * as net from 'net';
+import { sep } from 'path';
 
 let client: LanguageClient;
 
-function getServerOptions(ctx: ExtensionContext): ServerOptions {
+async function downloadToBin(
+  ctx: ExtensionContext,
+  url: string,
+  filename: string
+) {
+  const res = await fetch(url);
+  if (!existsSync(ctx.asAbsolutePath("bin"))) {
+    mkdirSync(ctx.asAbsolutePath("bin"), { recursive: true });
+  }
+  const actualFileName = ctx.asAbsolutePath(`bin${sep}${filename}`);
+  const fileStream = createWriteStream(actualFileName, { flags: "wx" });
+  await finished(Readable.fromWeb(res.body).pipe(fileStream));
+}
+
+async function resolveServerExecutable(ctx: ExtensionContext): Promise<string> {
+  const platformDetails = {
+    win32: {
+      url: "https://github.com/chrehall68/vls/releases/download/1.0.0/vls-windows-amd64.exe",
+      filename: "vls.exe",
+      doChmod: false,
+    },
+    darwin: {
+      url: "https://github.com/chrehall68/vls/releases/download/1.0.0/vls-macos-amd64",
+      filename: "vls",
+      doChmod: true,
+    },
+    linux: {
+      url: "https://github.com/chrehall68/vls/releases/download/1.0.0/vls-linux-amd64",
+      filename: "vls",
+      doChmod: true,
+    },
+  };
+
+  const platform = process.platform;
+  if (!platformDetails[platform]) {
+    throw new Error(`Unsupported platform: ${platform}`);
+  }
+  const { url, filename, doChmod } = platformDetails[platform];
+  if (!existsSync(ctx.asAbsolutePath(`bin${sep}${filename}`))) {
+    await downloadToBin(ctx, url, filename);
+    if (doChmod) {
+      // make it executable; rx-rx-rx
+      await chmod(ctx.asAbsolutePath(`bin${sep}${filename}`), 0o555);
+    }
+  }
+  return ctx.asAbsolutePath(`bin${sep}${filename}`);
+}
+
+async function getServerOptions(ctx: ExtensionContext): Promise<ServerOptions> {
   if (ctx.extensionMode == ExtensionMode.Development) {
     // In debug mode, the server is launched by VSCode (on this project) with Go debugger
-    // We need to connect to it with a socket because it's not a child process, no easy way to get its stdin/stdout (on linux, reading /proc/<pid>/0 and 1 is doable, but that's not cross platform) 
+    // We need to connect to it with a socket because it's not a child process, no easy way to get its stdin/stdout (on linux, reading /proc/<pid>/0 and 1 is doable, but that's not cross platform)
     const connectionInfo = {
       host: "localhost",
       port: 60256,
@@ -33,14 +85,15 @@ function getServerOptions(ctx: ExtensionContext): ServerOptions {
     };
   }
 
+  const executable = await resolveServerExecutable(ctx);
   return {
-    command: resolve(ctx.extensionPath, "server", "vls"),
+    command: executable,
     args: [],
   };
 }
 
-export function activate(ctx: ExtensionContext) {
-  const serverOptions = getServerOptions(ctx);
+export async function activate(ctx: ExtensionContext) {
+  const serverOptions = await getServerOptions(ctx);
 
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {

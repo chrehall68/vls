@@ -2,3 +2,7 @@ dist-newstyle/
 node_modules/
 bun.lockb
 out/
+dist/
+client/LICENSE
+client/README.md
+*.vsix

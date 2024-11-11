@@ -42,19 +42,19 @@ func (h Handler) jumpTo(fname string, line int, character int) ([]protocol.Locat
 }
 
 func (h Handler) Declaration(ctx context.Context, params *protocol.DeclarationParams) (result []protocol.Location, err error) {
-	fname := params.TextDocument.URI.Filename()
+	fname := URIToPath(string(params.TextDocument.URI))
 	pos := params.TextDocumentPositionParams.Position
 
 	return h.jumpTo(fname, int(pos.Line), int(pos.Character))
 }
 func (h Handler) Definition(ctx context.Context, params *protocol.DefinitionParams) (result []protocol.Location, err error) {
-	fname := params.TextDocument.URI.Filename()
+	fname := URIToPath(string(params.TextDocument.URI))
 	pos := params.TextDocumentPositionParams.Position
 
 	return h.jumpTo(fname, int(pos.Line), int(pos.Character))
 }
 func (h Handler) Implementation(ctx context.Context, params *protocol.ImplementationParams) (result []protocol.Location, err error) {
-	fname := params.TextDocument.URI.Filename()
+	fname := URIToPath(string(params.TextDocument.URI))
 	pos := params.TextDocumentPositionParams.Position
 
 	return h.jumpTo(fname, int(pos.Line), int(pos.Character))

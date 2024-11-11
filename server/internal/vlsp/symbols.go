@@ -12,7 +12,7 @@ import (
 func (h *Handler) getFileFullPaths(dir string) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		h.state.log.Sugar().Panic("while reading dir: %w", err)
+		h.state.log.Sugar().Panic("while reading dir: ", err)
 	}
 	paths := []string{}
 	for _, entry := range entries {
@@ -45,7 +45,7 @@ func (h Handler) GetSymbolsForFile(fname string, firstTime bool) {
 
 		// publish no diagnostics since stuff failed
 		obj := protocol.PublishDiagnosticsParams{
-			URI:         protocol.DocumentURI("file://" + fname),
+			URI:         protocol.DocumentURI(PathToURI(fname)),
 			Diagnostics: []protocol.Diagnostic{},
 		}
 		h.state.client.PublishDiagnostics(context.Background(), &obj)
@@ -60,7 +60,7 @@ func (h Handler) GetSymbolsForFile(fname string, firstTime bool) {
 
 		for _, module := range h.state.modules[fname] {
 			h.state.symbolMap[module.Identifier.Value] = protocol.Location{
-				URI: protocol.DocumentURI("file://" + fname),
+				URI: protocol.DocumentURI(PathToURI(fname)),
 				Range: protocol.Range{
 					Start: protocol.Position{Line: uint32(module.Identifier.Line()), Character: uint32(module.Identifier.StartCharacter())},
 					End:   protocol.Position{Line: uint32(module.Identifier.Line()), Character: uint32(module.Identifier.EndCharacter())}},
@@ -68,7 +68,7 @@ func (h Handler) GetSymbolsForFile(fname string, firstTime bool) {
 		}
 		for _, define := range h.state.defines[fname] {
 			h.state.symbolMap[define.Identifier.Value] = protocol.Location{
-				URI: protocol.DocumentURI("file://" + fname),
+				URI: protocol.DocumentURI(PathToURI(fname)),
 				Range: protocol.Range{
 					Start: protocol.Position{Line: uint32(define.Identifier.Line()), Character: uint32(define.Identifier.StartCharacter())},
 					End:   protocol.Position{Line: uint32(define.Identifier.Line()), Character: uint32(define.Identifier.EndCharacter())}},
@@ -81,7 +81,7 @@ func (h Handler) GetSymbolsForFile(fname string, firstTime bool) {
 			interpreter := lang.NewInterpreter(h.state.log, h.state.modules, h.state.defines)
 			diagnostics := interpreter.Interpret(results)
 			obj := protocol.PublishDiagnosticsParams{
-				URI:         protocol.DocumentURI("file://" + fname),
+				URI:         protocol.DocumentURI(PathToURI(fname)),
 				Diagnostics: diagnostics,
 			}
 			h.state.client.PublishDiagnostics(context.Background(), &obj)
@@ -108,7 +108,7 @@ func (h Handler) GetSymbols() {
 
 			// clear any existing diagnostics
 			obj := protocol.PublishDiagnosticsParams{
-				URI:         protocol.DocumentURI("file://" + file),
+				URI:         protocol.DocumentURI(PathToURI(file)),
 				Diagnostics: []protocol.Diagnostic{},
 			}
 			h.state.client.PublishDiagnostics(context.Background(), &obj)
@@ -131,7 +131,7 @@ func (h Handler) GetSymbols() {
 			interpreter := lang.NewInterpreter(h.state.log, h.state.modules, h.state.defines)
 			diagnostics := interpreter.Interpret(results)
 			obj := protocol.PublishDiagnosticsParams{
-				URI:         protocol.DocumentURI("file://" + file),
+				URI:         protocol.DocumentURI(PathToURI(file)),
 				Diagnostics: diagnostics,
 			}
 			h.state.client.PublishDiagnostics(context.Background(), &obj)

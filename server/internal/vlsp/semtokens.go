@@ -115,7 +115,7 @@ func (h Handler) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 	h.state.log.Sugar().Info("SemanticTokensFull called")
 
 	// get contents
-	f := params.TextDocument.URI.Filename()
+	f := URIToPath(string(params.TextDocument.URI))
 	contents := h.state.files[f].GetContents()
 
 	// extract tokens
@@ -125,7 +125,7 @@ func (h Handler) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 	// extract ast if possible
 	ast, err := lang.NewParser().ParseFile(tokens)
 	if err == nil {
-		h.state.log.Sugar().Info("Getting statements for file: ", err)
+		h.state.log.Sugar().Info("Getting statements for file: ", f)
 		interiorNodes := lang.GetInteriorStatements(ast)
 		tokensIdx := 0
 
