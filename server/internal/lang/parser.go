@@ -153,7 +153,7 @@ type Parser struct {
 
 func NewParser() *Parser {
 	return &Parser{
-		skipTokens: []string{ "whitespace","comment", "newline"},
+		skipTokens: []string{"whitespace", "comment", "newline"},
 	}
 }
 
@@ -1788,6 +1788,117 @@ func (p *Parser) ParseFile(tokens []Token) (result FileNode, err error) {
 	}
 
 	return
+}
+func getInteriorStatementsFromAlwaysStatements(statements []AlwaysStatement) []InteriorNode {
+	var result []InteriorNode
+	for _, statement := range statements {
+		result = append(result, getInteriorStatementsFromAlwaysStatement(statement)...)
+	}
+	return result
+}
+func getInteriorStatementsFromAlwaysStatement(statement AlwaysStatement) []InteriorNode {
+	var result []InteriorNode
+	if statement.BeginBlock != nil {
+		result = append(result, getInteriorStatementsFromAlwaysStatements(statement.BeginBlock.Statements)...)
+	} else if statement.CaseNode != nil {
+		// add regular cases
+		for _, caseNode := range statement.CaseNode.Cases {
+			result = append(result, getInteriorStatementsFromAlwaysStatement(caseNode.Statement)...)
+		}
+		// add default case
+		if statement.CaseNode.Default != nil {
+			result = append(result, getInteriorStatementsFromAlwaysStatement(*statement.CaseNode.Default)...)
+		}
+	} else if statement.ForBlock != nil {
+		result = append(result, getInteriorStatementsFromAlwaysStatement(statement.ForBlock.Body)...)
+	} else if statement.IfBlock != nil {
+		result = append(result, getInteriorStatementsFromAlwaysStatement(statement.IfBlock.Body)...)
+	} else if statement.InteriorNode != nil {
+		result = append(result, getInteriorStatementsFromInteriorNode(*statement.InteriorNode)...)
+	}
+	return result
+}
+func getInteriorStatementsFromInteriorNode(interiorNode InteriorNode) []InteriorNode {
+	var result []InteriorNode
+	if interiorNode.AlwaysNode != nil {
+		result = append(result, getInteriorStatementsFromAlwaysStatement(interiorNode.AlwaysNode.Statement)...)
+	} else if interiorNode.GenerateNode != nil {
+		result = append(result, getInteriorStatementsFromAlwaysStatements(interiorNode.GenerateNode.Statements)...)
+	} else if interiorNode.InitialNode != nil {
+		result = append(result, getInteriorStatementsFromAlwaysStatement(interiorNode.InitialNode.Statement)...)
+	} else {
+		// this belongs to the result
+		result = append(result, interiorNode)
+	}
+	return result
+}
+
+func GetInteriorStatements(fileNode FileNode) []InteriorNode {
+	var result []InteriorNode
+	for _, statements := range fileNode.Statements {
+		if statements.Module != nil {
+			interior := statements.Module.Interior
+			for _, statement := range interior {
+				result = append(result, getInteriorStatementsFromInteriorNode(statement)...)
+			}
+		}
+	}
+	return result
+}
+func getFunctionStatementsFromAlwaysStatements(statements []AlwaysStatement) []FunctionNode {
+	var result []FunctionNode
+	for _, statement := range statements {
+		result = append(result, getFunctionStatementsFromAlwaysStatement(statement)...)
+	}
+	return result
+}
+func getFunctionStatementsFromAlwaysStatement(statement AlwaysStatement) []FunctionNode {
+	var result []FunctionNode
+	if statement.BeginBlock != nil {
+		result = append(result, getFunctionStatementsFromAlwaysStatements(statement.BeginBlock.Statements)...)
+	} else if statement.CaseNode != nil {
+		// add regular cases
+		for _, caseNode := range statement.CaseNode.Cases {
+			result = append(result, getFunctionStatementsFromAlwaysStatement(caseNode.Statement)...)
+		}
+		// add default case
+		if statement.CaseNode.Default != nil {
+			result = append(result, getFunctionStatementsFromAlwaysStatement(*statement.CaseNode.Default)...)
+		}
+	} else if statement.ForBlock != nil {
+		result = append(result, getFunctionStatementsFromAlwaysStatement(statement.ForBlock.Body)...)
+	} else if statement.FunctionNode != nil {
+		result = append(result, *statement.FunctionNode)
+	} else if statement.IfBlock != nil {
+		result = append(result, getFunctionStatementsFromAlwaysStatement(statement.IfBlock.Body)...)
+	} else if statement.InteriorNode != nil {
+		result = append(result, getFunctionStatementsFromInteriorNode(*statement.InteriorNode)...)
+	}
+	return result
+}
+func getFunctionStatementsFromInteriorNode(interiorNode InteriorNode) []FunctionNode {
+	var result []FunctionNode
+	if interiorNode.AlwaysNode != nil {
+		result = append(result, getFunctionStatementsFromAlwaysStatement(interiorNode.AlwaysNode.Statement)...)
+	} else if interiorNode.GenerateNode != nil {
+		result = append(result, getFunctionStatementsFromAlwaysStatements(interiorNode.GenerateNode.Statements)...)
+	} else if interiorNode.InitialNode != nil {
+		result = append(result, getFunctionStatementsFromAlwaysStatement(interiorNode.InitialNode.Statement)...)
+	}
+	return result
+}
+
+func GetFunctionNodes(fileNode FileNode) []FunctionNode {
+	var result []FunctionNode
+	for _, statements := range fileNode.Statements {
+		if statements.Module != nil {
+			interior := statements.Module.Interior
+			for _, statement := range interior {
+				result = append(result, getFunctionStatementsFromInteriorNode(statement)...)
+			}
+		}
+	}
+	return result
 }
 
 /**

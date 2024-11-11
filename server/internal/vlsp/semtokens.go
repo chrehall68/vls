@@ -28,11 +28,14 @@ func GetSemanticTokensOptions() SemanticTokensOptions {
 	return SemanticTokensOptions{
 		Legend: protocol.SemanticTokensLegend{
 			TokenTypes: []protocol.SemanticTokenTypes{
-				protocol.SemanticTokenType,     // 0
-				protocol.SemanticTokenComment,  // 1
-				protocol.SemanticTokenNumber,   // 2
-				protocol.SemanticTokenMacro,    // 3
-				protocol.SemanticTokenVariable, // 4
+				protocol.SemanticTokenType,      // 0
+				protocol.SemanticTokenComment,   // 1
+				protocol.SemanticTokenNumber,    // 2
+				protocol.SemanticTokenMacro,     // 3
+				protocol.SemanticTokenVariable,  // 4
+				protocol.SemanticTokenClass,     // 5
+				protocol.SemanticTokenParameter, // 6
+				protocol.SemanticTokenFunction,  // 7
 			},
 			TokenModifiers: []protocol.SemanticTokenModifiers{},
 		},
@@ -51,25 +54,36 @@ func Encode(tokens []lang.Token) []uint32 {
 	// maps token type to int
 	// the tokens to ignore are not in here
 	tokenTypeToInt := map[string]uint32{
-		"comment":     1,
-		"type":        0,
-		"literal":     2,
-		"module":      3,
-		"endmodule":   3,
-		"begin":       3,
-		"end":         3,
-		"case":        3,
-		"endcase":     3,
-		"generate":    3,
-		"endgenerate": 3,
-		"for":         3,
-		"if":          3,
-		"else":        3,
-		"assign":      3,
-		"initial":     3,
-		"time":        3,
-		"default":     3,
-		"identifier":  4,
+		"comment":         1,
+		"type":            0,
+		"defparam":        0,
+		"literal":         2,
+		"module":          3,
+		"endmodule":       3,
+		"begin":           3,
+		"end":             3,
+		"case":            3,
+		"endcase":         3,
+		"generate":        3,
+		"endgenerate":     3,
+		"for":             3,
+		"if":              3,
+		"else":            3,
+		"assign":          3,
+		"initial":         3,
+		"always":          3,
+		"time":            3,
+		"default":         3,
+		"include":         3,
+		"timescale":       3,
+		"define":          3,
+		"identifier":      4,
+		"existing_module": 5,
+		"port":            6,
+		"funcliteral":     7,
+		"signed":          7,
+		"dollar":          7,
+		"pound":           7,
 	}
 
 	addToken := func(token lang.Token) {
@@ -107,6 +121,56 @@ func (h Handler) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 	// extract tokens
 	lexer := lang.NewVLexer(h.state.log)
 	tokens, _ := lexer.Lex(contents)
+
+	// extract ast if possible
+	ast, err := lang.NewParser().ParseFile(tokens)
+	if err == nil {
+		h.state.log.Sugar().Info("Getting statements for file: ", err)
+		interiorNodes := lang.GetInteriorStatements(ast)
+		tokensIdx := 0
+
+		for _, interiorNode := range interiorNodes {
+			if interiorNode.ModuleApplicationNode != nil {
+				// get to the current module
+				for tokens[tokensIdx] != interiorNode.ModuleApplicationNode.ModuleName && tokensIdx < len(tokens) {
+					tokensIdx++
+				}
+
+				// then label it as a module name
+				if tokensIdx < len(tokens) {
+					tokens[tokensIdx].Type = "existing_module"
+				}
+
+				for _, argument := range interiorNode.ModuleApplicationNode.Arguments {
+					if argument.Label != nil {
+						// get to this label and label it as a port
+						for tokens[tokensIdx] != *argument.Label && tokensIdx < len(tokens) {
+							tokensIdx++
+						}
+
+						if tokensIdx < len(tokens) {
+							tokens[tokensIdx].Type = "port"
+						}
+					}
+				}
+			}
+		}
+
+		// do similar thing for functions
+		tokensIdx = 0
+		functionNodes := lang.GetFunctionNodes(ast)
+
+		for _, functionNode := range functionNodes {
+			// get to the function name
+			for tokens[tokensIdx] != functionNode.Function && tokensIdx < len(tokens) {
+				tokensIdx++
+			}
+
+			if tokensIdx < len(tokens) {
+				tokens[tokensIdx].Type = "funcliteral"
+			}
+		}
+	}
 
 	// encode
 	result := &protocol.SemanticTokens{
