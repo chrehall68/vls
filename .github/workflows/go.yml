@@ -22,6 +22,7 @@ jobs:
 
       - name: Build
         run: |
+          cd server
           GOOS=linux GOARCH=amd64 go build -o linux/vls
           GOOS=windows GOARCH=amd64 go build -o windows/vls.exe
           GOOS=darwin GOARCH=amd64 go build -o macos/vls
