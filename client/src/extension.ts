@@ -1,13 +1,9 @@
-/* --------------------------------------------------------------------------------------------
- * Copyright (c) Microsoft Corporation. All rights reserved.
- * Licensed under the MIT License. See License.txt in the project root for license information.
- * ------------------------------------------------------------------------------------------ */
-
 import { ExtensionContext, ExtensionMode, workspace } from "vscode";
 
 import { createWriteStream, existsSync, mkdirSync } from "fs";
 import { chmod } from "fs/promises";
 import * as net from "net";
+import { sep } from "path";
 import { Readable } from "stream";
 import { finished } from "stream/promises";
 import {
@@ -16,7 +12,6 @@ import {
   ServerOptions,
   StreamInfo,
 } from "vscode-languageclient/node";
-import { sep } from 'path';
 
 let client: LanguageClient;
 
@@ -35,19 +30,20 @@ async function downloadToBin(
 }
 
 async function resolveServerExecutable(ctx: ExtensionContext): Promise<string> {
+  const version = "1.0.1";
   const platformDetails = {
     win32: {
-      url: "https://github.com/chrehall68/vls/releases/download/1.0.0/vls-windows-amd64.exe",
+      url: `https://github.com/chrehall68/vls/releases/download/${version}/vls-windows-amd64.exe`,
       filename: "vls.exe",
       doChmod: false,
     },
     darwin: {
-      url: "https://github.com/chrehall68/vls/releases/download/1.0.0/vls-macos-amd64",
+      url: `https://github.com/chrehall68/vls/releases/download/${version}/vls-macos-amd64`,
       filename: "vls",
       doChmod: true,
     },
     linux: {
-      url: "https://github.com/chrehall68/vls/releases/download/1.0.0/vls-linux-amd64",
+      url: `https://github.com/chrehall68/vls/releases/download/${version}/vls-linux-amd64`,
       filename: "vls",
       doChmod: true,
     },
