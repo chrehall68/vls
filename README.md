@@ -1,6 +1,6 @@
 # Verilog Language Server Extension
 
-Inspired by the lack of editor support in existing verilog extensions for VSCode, this repository contains a powerful, hand-written Verilog language server and an extension to use it with VSCode.
+Inspired by the lack of editor support in existing Verilog extensions for VSCode, this repository contains a powerful, hand-written Verilog language server and an extension to use it with VSCode.
 
 ## Functionality
 
@@ -11,13 +11,13 @@ Current Features:
 - Completions
 - Go To Definition
 - Token Highlighting
+- Warning Diagnostics
 
 Roadmap Features:
 
-- Parsing Module Insides
+- Error Diagnostics
 - Error-tolerant parser
 - Improved Completions
-- Diagnostics
 
 ## Run in Development Environment
 
