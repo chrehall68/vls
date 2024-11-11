@@ -31,16 +31,16 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: vls-linux-amd64
-          path: linux/vls
+          path: server/linux/vls
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v3
         with:
           name: vls-windows-amd64
-          path: windows/vls.exe
+          path: server/windows/vls.exe
 
       - name: Upload Darwin Artifact
         uses: actions/upload-artifact@v3
         with:
           name: vls-darwin-amd64
-          path: macos/vls
+          path: server/macos/vls
