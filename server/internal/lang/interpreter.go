@@ -6,23 +6,20 @@ import (
 )
 
 type Interpreter struct {
-	Modules     []ModuleNode
 	builtins    map[string]bool
-	Defines     []DefineNode
+	defines     []DefineNode
 	Diagnostics []protocol.Diagnostic
 	moduleMap   map[string]ModuleNode
-	Log         *zap.Logger
+	log         *zap.Logger
 }
 
 func NewInterpreter(logger *zap.Logger, modules map[string][]ModuleNode, defines map[string][]DefineNode) *Interpreter {
 	moduleMap := map[string]ModuleNode{}
-	flattenedModules := []ModuleNode{}
 	flattenedDefines := []DefineNode{}
 	for _, mods := range modules {
 		for _, module := range mods {
 			moduleMap[module.Identifier.Value] = module
 		}
-		flattenedModules = append(flattenedModules, mods...)
 	}
 	for _, defs := range defines {
 		flattenedDefines = append(flattenedDefines, defs...)
@@ -43,11 +40,10 @@ func NewInterpreter(logger *zap.Logger, modules map[string][]ModuleNode, defines
 	}
 
 	return &Interpreter{
-		Modules:     flattenedModules,
-		Defines:     flattenedDefines,
+		defines:     flattenedDefines,
 		Diagnostics: []protocol.Diagnostic{},
 		moduleMap:   moduleMap,
-		Log:         logger,
+		log:         logger,
 		builtins:    builtins,
 	}
 }
@@ -141,8 +137,11 @@ func (i *Interpreter) diagnoseInteriorNode(node InteriorNode, curSymbols map[str
 	return
 }
 
-func (i *Interpreter) DiagnoseModule(module ModuleNode) {
+func (i *Interpreter) diagnoseModule(module ModuleNode) {
 	knownSymbols := map[string]bool{}
+	for _, define := range i.defines {
+		knownSymbols[define.Identifier.Value] = true
+	}
 	for _, statement := range module.Interior {
 		knownSymbols = i.diagnoseInteriorNode(statement, knownSymbols)
 	}
@@ -151,7 +150,7 @@ func (i *Interpreter) DiagnoseModule(module ModuleNode) {
 func (i *Interpreter) Interpret(FileNode FileNode) []protocol.Diagnostic {
 	for _, topLevelStatement := range FileNode.Statements {
 		if topLevelStatement.Module != nil {
-			i.DiagnoseModule(*topLevelStatement.Module)
+			i.diagnoseModule(*topLevelStatement.Module)
 		}
 	}
 
