@@ -43,12 +43,31 @@ func (h Handler) GetSymbolsForFile(fname string, firstTime bool) {
 		h.state.defines[fname] = []lang.DefineNode{}
 		h.state.modules[fname] = []lang.ModuleNode{}
 
-		// publish no diagnostics since stuff failed
-		obj := protocol.PublishDiagnosticsParams{
-			URI:         protocol.DocumentURI(PathToURI(fname)),
-			Diagnostics: []protocol.Diagnostic{},
+		// publish the error as a diagnostic
+		if parser.FarthestErrorPosition >= 0 && parser.FarthestErrorPosition < len(tokens) {
+			tok := tokens[parser.FarthestErrorPosition]
+			diag := protocol.Diagnostic{
+				Range: protocol.Range{
+					Start: protocol.Position{Line: uint32(tok.Line()), Character: uint32(tok.StartCharacter())},
+					End:   protocol.Position{Line: uint32(tok.Line()), Character: uint32(tok.EndCharacter())},
+				},
+				Severity: protocol.DiagnosticSeverityError,
+				Message:  err.Error(),
+			}
+			obj := protocol.PublishDiagnosticsParams{
+				URI:         protocol.DocumentURI(PathToURI(fname)),
+				Diagnostics: []protocol.Diagnostic{diag},
+			}
+			h.state.client.PublishDiagnostics(context.Background(), &obj)
+		} else {
+			// somehow we got an error out of bounds
+			// might happen if someone puts an emoji in the file
+			obj := protocol.PublishDiagnosticsParams{
+				URI:         protocol.DocumentURI(PathToURI(fname)),
+				Diagnostics: []protocol.Diagnostic{},
+			}
+			h.state.client.PublishDiagnostics(context.Background(), &obj)
 		}
-		h.state.client.PublishDiagnostics(context.Background(), &obj)
 	} else {
 		for _, statement := range results.Statements {
 			if statement.Module != nil {

@@ -148,17 +148,26 @@ type CaseNode struct {
 	Statement  AlwaysStatement
 }
 type Parser struct {
-	skipTokens []string
+	skipTokens            []string
+	FarthestErrorPosition int
+	FarthestError         *error
 }
 
 func NewParser() *Parser {
 	return &Parser{
-		skipTokens: []string{"whitespace", "comment", "newline"},
+		skipTokens:            []string{"whitespace", "comment", "newline"},
+		FarthestErrorPosition: -1,
+		FarthestError:         nil,
 	}
 }
 
-func newErrorFrom(from string, expected []string, pos int, tokens []Token) error {
-	return fmt.Errorf("parsing %s, expected %v, got: %v at position %d", from, expected, tokens[pos], pos)
+func (p *Parser) newErrorFrom(from string, expected []string, pos int, tokens []Token) error {
+	err := fmt.Errorf("parsing %s, expected %v, got: %v at position %d", from, expected, tokens[pos], pos)
+	if pos > p.FarthestErrorPosition {
+		p.FarthestErrorPosition = pos
+		p.FarthestError = &err
+	}
+	return err
 }
 func (p *Parser) skip(tokens []Token, skippables []string, pos int) int {
 	i := pos
@@ -183,7 +192,7 @@ func (p *Parser) checkToken(from string, expected []string, pos int, tokens []To
 	pos = p.skip(tokens, p.skipTokens, pos)
 
 	if pos >= len(tokens) {
-		return -1, newErrorFrom(from, expected, len(tokens), append(tokens, Token{Type: "EOF"}))
+		return -1, p.newErrorFrom(from, expected, len(tokens), append(tokens, Token{Type: "EOF"}))
 	}
 
 	for _, tp := range expected {
@@ -191,7 +200,7 @@ func (p *Parser) checkToken(from string, expected []string, pos int, tokens []To
 			return pos, nil
 		}
 	}
-	return -1, newErrorFrom(from, expected, pos, tokens)
+	return -1, p.newErrorFrom(from, expected, pos, tokens)
 }
 
 func (p *Parser) isEOF(tokens []Token, pos int) bool {
@@ -1775,7 +1784,7 @@ func (p *Parser) ParseFile(tokens []Token) (result FileNode, err error) {
 			// try module
 			module, newPos, e := p.parseModule(tokens, pos)
 			if e != nil {
-				err = e
+				err = *p.FarthestError
 				return
 			}
 			result.Statements = append(result.Statements, TopLevelStatement{
