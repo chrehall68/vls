@@ -2,6 +2,8 @@
 
 Inspired by the lack of editor support in existing Verilog extensions for VSCode, this repository contains a powerful, hand-written Verilog language server and an extension to use it with VSCode.
 
+To use the extension, simply open the workspace containing your Verilog project. Assuming the project is opened in Trusted mode, the extension should be able to instantly provide feedback.
+
 ## Functionality
 
 This Language Server works for Verilog files.
@@ -9,17 +11,21 @@ This Language Server works for Verilog files.
 Current Features:
 
 - Completions
-- Go To Definition
+- Go To Definition for modules
 - Token Highlighting
 - Warning Diagnostics
+- Error Diagnostics
 
 Roadmap Features:
 
-- Error Diagnostics
+- Go To Definition for variables
+- Find all References
 - Error-tolerant parser
 - Improved Completions
 
-## Run in Development Environment
+## Contributing
+
+If you want to contribute, you can get started by following the below steps:
 
 - Clone this repository
 - Run `npm install` in `client/`. This installs all necessary npm modules.
