@@ -1,4 +1,3 @@
-// A launch configuration that compiles the extension and then opens it inside a new window
 {
 	"version": "0.2.0",
 	"configurations": [
@@ -15,22 +14,22 @@
 			],
 		},
 		{
+			"name": "Launch Extension",
 			"type": "extensionHost",
 			"request": "launch",
-			"name": "Launch Client",
+			// path to VSCode executable
 			"runtimeExecutable": "${execPath}",
 			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}"
+				"--extensionDevelopmentPath=${workspaceFolder}",
 			],
 			"outFiles": [
-				"${workspaceFolder}/client/out/**/*.js",
-			],
-			"preLaunchTask": {
-				"type": "npm",
-				"path": "client",
-				"script": "compile",
-			},
-		}
+                "${workspaceFolder}/client/dist/**/*.js"
+            ],
+			"sourceMaps": true,
+			"smartStep": true,
+			"preLaunchTask": "npm: bundle-dev",
+			"cwd": "${workspaceFolder}/client"
+		},
 	],
 	"compounds": [
 		{
@@ -39,7 +38,7 @@
 			//   the extension expects to be able to immediately connect to the specified port without a mechanism to wait for server fully starts
 			//   this works because VSCode spends around 1 second to initialize, before loading extensions
 			//   if VSCode gets any faster it might be a problem
-			"configurations": ["Launch Server", "Launch Client"],
+			"configurations": ["Launch Server", "Launch Extension"],
 		}
 	]
 }

@@ -3,7 +3,7 @@
   "description": "A language server for Verilog",
   "author": "chrehall68",
   "license": "MIT",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/chrehall68/vls"
@@ -19,7 +19,7 @@
   "activationEvents": [
     "onLanguage:verilog"
   ],
-  "main": "./dist/extension",
+  "main": "./dist/extension.js",
   "contributes": {
     "languages": [
       {
@@ -35,13 +35,14 @@
   },
   "scripts": {
     "clean": "rm -rf ./dist/* && rm -rf ./out/* && rm -rf ./bin/* && rm *.vsix",
-    "package": "cp ../README.md ./README.md && cp ../LICENSE ./LICENSE && npx vsce package --baseContentUrl https://github.com/golang/vscode-go/raw/HEAD --baseImagesUrl https://github.com/golang/vscode-go/raw/HEAD",
+    "package": "cp ../README.md ./README.md && cp ../LICENSE ./LICENSE && npx vsce package",
     "vscode:prepublish": "npm run compile",
     "bundle": "esbuild src/extension.ts --bundle --outdir=dist --external:vscode --format=cjs --platform=node",
     "bundle-dev": "npm run bundle -- --sourcemap",
     "bundle-watch": "npm run bundle -- --sourcemap --watch",
+    "test-compile": "tsc -p ./",
     "compile": "npm run bundle",
-    "watch": "tsc -b -w",
+    "watch": "tsc -watch -p ./",
     "lint": "eslint"
   },
   "devDependencies": {
