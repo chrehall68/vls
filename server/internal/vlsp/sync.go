@@ -21,9 +21,7 @@ func (h Handler) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 		fnode.SetContents(params.ContentChanges[len(params.ContentChanges)-1].Text)
 
 		// update symbols
-		h.state.log.Sugar().Info("getting symbols")
 		h.GetSymbolsForFile(file, false)
-		h.state.log.Sugar().Info("done getting them")
 	}
 	return
 }
