@@ -5,8 +5,8 @@
 
 import { ExtensionContext, ExtensionMode, workspace } from "vscode";
 
-import { createWriteStream, existsSync } from "fs";
-import { chmod, mkdir } from "fs/promises";
+import { createWriteStream, existsSync, mkdirSync } from "fs";
+import { chmod } from "fs/promises";
 import * as net from "net";
 import { Readable } from "stream";
 import { finished } from "stream/promises";
@@ -16,6 +16,7 @@ import {
   ServerOptions,
   StreamInfo,
 } from "vscode-languageclient/node";
+import { sep } from 'path';
 
 let client: LanguageClient;
 
@@ -26,9 +27,9 @@ async function downloadToBin(
 ) {
   const res = await fetch(url);
   if (!existsSync(ctx.asAbsolutePath("bin"))) {
-    await mkdir(ctx.asAbsolutePath("bin"), { recursive: true });
+    mkdirSync(ctx.asAbsolutePath("bin"), { recursive: true });
   }
-  const actualFileName = ctx.asAbsolutePath(`bin/${filename}`);
+  const actualFileName = ctx.asAbsolutePath(`bin${sep}${filename}`);
   const fileStream = createWriteStream(actualFileName, { flags: "wx" });
   await finished(Readable.fromWeb(res.body).pipe(fileStream));
 }
@@ -57,14 +58,14 @@ async function resolveServerExecutable(ctx: ExtensionContext): Promise<string> {
     throw new Error(`Unsupported platform: ${platform}`);
   }
   const { url, filename, doChmod } = platformDetails[platform];
-  if (!existsSync(ctx.asAbsolutePath(`bin/${filename}`))) {
+  if (!existsSync(ctx.asAbsolutePath(`bin${sep}${filename}`))) {
     await downloadToBin(ctx, url, filename);
     if (doChmod) {
       // make it executable; rx-rx-rx
-      await chmod(ctx.asAbsolutePath(`bin/${filename}`), 0o555);
+      await chmod(ctx.asAbsolutePath(`bin${sep}${filename}`), 0o555);
     }
   }
-  return ctx.asAbsolutePath(`bin/${filename}`);
+  return ctx.asAbsolutePath(`bin${sep}${filename}`);
 }
 
 async function getServerOptions(ctx: ExtensionContext): Promise<ServerOptions> {

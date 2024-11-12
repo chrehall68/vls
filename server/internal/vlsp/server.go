@@ -2,7 +2,6 @@ package vlsp
 
 import (
 	"context"
-	"strings"
 
 	"github.com/chrehall68/vls/internal/lang"
 	"go.lsp.dev/jsonrpc2"
@@ -55,7 +54,7 @@ func (h Handler) Initialize(ctx context.Context, params *protocol.InitializePara
 	h.state.log.Sugar().Infof("workspace: %v", workspace)
 	if workspace != "" {
 		h.state.log.Sugar().Info("setting up workspace since it wasn't empty")
-		h.state.workspace = strings.TrimPrefix(workspace, "file://")
+		h.state.workspace = URIToPath(workspace)
 		go func() {
 			h.GetSymbols()
 			h.state.log.Sugar().Info("finished parsing workspace, have symbols:")
