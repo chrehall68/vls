@@ -35,14 +35,11 @@
   },
   "scripts": {
     "clean": "rm -rf ./dist/* && rm -rf ./out/* && rm -rf ./bin/* && rm *.vsix",
-    "package": "cp ../README.md ./README.md && cp ../LICENSE ./LICENSE && npx vsce package",
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run bundle && npm run build",
+    "build": "node build.mjs",
     "bundle": "esbuild src/extension.ts --bundle --outdir=dist --external:vscode --format=cjs --platform=node",
     "bundle-dev": "npm run bundle -- --sourcemap",
     "bundle-watch": "npm run bundle -- --sourcemap --watch",
-    "test-compile": "tsc -p ./",
-    "compile": "npm run bundle",
-    "watch": "tsc -watch -p ./",
     "lint": "eslint"
   },
   "devDependencies": {
