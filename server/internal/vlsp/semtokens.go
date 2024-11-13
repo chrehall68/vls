@@ -56,6 +56,7 @@ func Encode(tokens []lang.Token) []uint32 {
 	tokenTypeToInt := map[string]uint32{
 		"comment":         1,
 		"type":            0,
+		"direction":       0,
 		"defparam":        0,
 		"literal":         2,
 		"module":          3,

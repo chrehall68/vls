@@ -785,13 +785,27 @@ func (p *Parser) parseAssignmentNode(tokens []Token, pos int) (result Assignment
 }
 
 func (p *Parser) parseTypeNode(tokens []Token, pos int) (result TypeNode, newPos int, err error) {
-	// TYPE [<range>]
-	pos, err = p.checkToken("type", []string{"type"}, pos, tokens)
+	// (TYPE | DIRECTION [TYPE]) [<range>]
+	pos, err = p.checkToken("type", []string{"type", "direction"}, pos, tokens)
 	if err != nil {
 		return
 	}
-	result.Type = tokens[pos]
-	pos++
+
+	if tokens[pos].Type == "direction" {
+		// potentially take a type
+		potentialPos, e := p.checkToken("type", []string{"type"}, pos+1, tokens)
+		if e == nil {
+			// success!
+			result.Type = tokens[potentialPos]
+			pos = potentialPos + 1
+		} else {
+			result.Type = tokens[pos]
+			pos++
+		}
+	} else {
+		result.Type = tokens[pos]
+		pos++
+	}
 
 	// now try taking the range; it's ok if it fails since it's optional
 	rangeNode, potentialPos, e := p.parseRangeNode(tokens, pos)
@@ -900,14 +914,27 @@ func (p *Parser) parseDeclarationNode(tokens []Token, pos int) (result Declarati
 }
 
 func (p *Parser) parseBeginBlock(tokens []Token, pos int) (result BeginBlockNode, newPos int, err error) {
-	// BEGIN <generateable_statements> END
+	// BEGIN [ COLON <identifier> ] { <alwaysable_statement> } END
 	pos, err = p.checkToken("begin block", []string{"begin"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
-	// get the generateable statements
+	// optionally, get colon
+	potentialPos, e := p.checkToken("begin block", []string{"colon"}, pos, tokens)
+	if e == nil {
+		pos = potentialPos + 1
+
+		// get identifier
+		pos, err = p.checkToken("begin block", []string{"identifier"}, pos, tokens)
+		if err != nil {
+			return
+		}
+		pos++
+	}
+
+	// get the alwaysable statements
 	generateableStatements, potentialPos, e := p.parseAlwaysStatements(tokens, pos)
 	if e != nil {
 		err = e
@@ -1824,6 +1851,9 @@ func getInteriorStatementsFromAlwaysStatement(statement AlwaysStatement) []Inter
 		result = append(result, getInteriorStatementsFromAlwaysStatement(statement.ForBlock.Body)...)
 	} else if statement.IfBlock != nil {
 		result = append(result, getInteriorStatementsFromAlwaysStatement(statement.IfBlock.Body)...)
+		if statement.IfBlock.Else != nil {
+			result = append(result, getInteriorStatementsFromAlwaysStatement(*statement.IfBlock.Else)...)
+		}
 	} else if statement.InteriorNode != nil {
 		result = append(result, getInteriorStatementsFromInteriorNode(*statement.InteriorNode)...)
 	}
@@ -1882,6 +1912,9 @@ func getFunctionStatementsFromAlwaysStatement(statement AlwaysStatement) []Funct
 		result = append(result, *statement.FunctionNode)
 	} else if statement.IfBlock != nil {
 		result = append(result, getFunctionStatementsFromAlwaysStatement(statement.IfBlock.Body)...)
+		if statement.IfBlock.Else != nil {
+			result = append(result, getFunctionStatementsFromAlwaysStatement(*statement.IfBlock.Else)...)
+		}
 	} else if statement.InteriorNode != nil {
 		result = append(result, getFunctionStatementsFromInteriorNode(*statement.InteriorNode)...)
 	}
@@ -1949,7 +1982,7 @@ Grammar:
 
 <declaration> -> <type> <single_var> EQUAL <expr> { COMMA <single_var> EQUAL <expr> } SEMICOLON
 | <type> <single_var> { COMMA <single_var> } SEMICOLON
-<type> -> TYPE [<range>]
+<type> -> (TYPE | DIRECTION [TYPE]) [<range>]
 <index> -> LBRACKET <identifier> RBRACKET | LBRACKET <integer> RBRACKET
 <range> -> LBRACKET <integer> COLON <integer> RBRACKET
 <integer> -> LITERAL | DEFINE
@@ -1967,7 +2000,7 @@ Grammar:
 <defparam> -> DEFPARAM <identifier> { DOT <identifier> } EQUAL <expr> SEMICOLON
 
 <generate> -> GENERATE { <alwaysable_statement> } ENDGENERATE
-<begin_block> -> BEGIN { <alwaysable_statement> } END
+<begin_block> -> BEGIN [ COLON <identifier> ] { <alwaysable_statement> } END
 <for> -> FOR LPAREN [<assignment_without_semicolon>] SEMICOLON [<expr>] SEMICOLON [<assignment_without_semicolon>] RPAREN <alwaysable_statement>
 <if> -> IF LPAREN <expr> RPAREN <alwaysable_statement> [ELSE <alwaysable_statement>]
 <builtin_function_call> -> DOLLAR <identifier> [LPAREN <expr> { COMMA <expr> } RPAREN] SEMICOLON

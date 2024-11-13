@@ -68,7 +68,8 @@ func NewVLexer(logger *zap.Logger) *VLexer {
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\$time)|(\$realtime))`), "funcliteral")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\$signed)|(\$unsigned))`), "signed")
 	// variable-related
-	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((reg)|(wire)|(genvar)|(parameter)|(input)|(output)|(inout)|(integer))`), "type")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((reg)|(wire)|(genvar)|(parameter)|(integer))`), "type")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((input)|(output)|(inout))`), "direction")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^defparam`), "defparam")
 	vlexer.AddMapping(regexp.MustCompile("^`?[A-Za-z][a-zA-Z0-9_]*"), func(code string) (Token, error) {
 		re := regexp.MustCompile("^`?(?P<IDENTIFIER>[A-Za-z][a-zA-Z0-9_]*)")
