@@ -30,7 +30,7 @@ async function downloadToBin(
 }
 
 async function resolveServerExecutable(ctx: ExtensionContext): Promise<string> {
-  const version = "1.0.2";
+  const version = "1.0.3";
   const platformDetails = {
     win32: {
       url: `https://github.com/chrehall68/vls/releases/download/${version}/vls-windows-amd64.exe`,
