@@ -11,7 +11,6 @@
 .vscode/
 .vscode-test/
 SECURITY.md
-bin/
 build/
 codereview.cfg
 docs/
@@ -23,4 +22,6 @@ test/
 third_party/
 tools/
 tsconfig.json
+eslint.config.mjs
+build.mjs
 typings/

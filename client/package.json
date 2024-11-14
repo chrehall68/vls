@@ -35,14 +35,11 @@
   },
   "scripts": {
     "clean": "rm -rf ./dist/* && rm -rf ./out/* && rm -rf ./bin/* && rm *.vsix",
-    "package": "cp ../README.md ./README.md && cp ../LICENSE ./LICENSE && npx vsce package",
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run bundle && npm run build",
+    "build": "node build.mjs",
     "bundle": "esbuild src/extension.ts --bundle --outdir=dist --external:vscode --format=cjs --platform=node",
     "bundle-dev": "npm run bundle -- --sourcemap",
     "bundle-watch": "npm run bundle -- --sourcemap --watch",
-    "test-compile": "tsc -p ./",
-    "compile": "npm run bundle",
-    "watch": "tsc -watch -p ./",
     "lint": "eslint"
   },
   "devDependencies": {
@@ -52,6 +49,7 @@
     "@types/node": "^20",
     "@types/vscode": "^1.75.1",
     "@vscode/test-electron": "^2.3.9",
+    "@vscode/vsce": "^2.15.0",
     "esbuild": "^0.24.0",
     "eslint": "^9.13.0",
     "mocha": "^10.3.0",

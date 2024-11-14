@@ -1,6 +1,7 @@
 dist-newstyle/
 node_modules/
 bun.lockb
+bin/
 out/
 dist/
 client/LICENSE
