@@ -17,30 +17,42 @@ jobs:
         with:
           go-version: "1.20"
 
-      - name: Build
+      - name: Prepare building environment
         run: |
           cd client
           npm install
-          mkdir out
-          TARGET_OS=windows TARGET_ARCH=amd64 npx vsce package -t linux-x64 -o vls-linux.vsix
-          rm out/*
-          TARGET_OS=windows TARGET_ARCH=amd64 npx vsce package -t win32-x64 -o vls-windows.vsix
-          rm out/*
-          TARGET_OS=windows TARGET_ARCH=amd64 npx vsce package -t darwin-x64 -o vls-darwin.vsix
 
-      - name: Upload Linux Artifact
+      - name: Build for Linux x86_64
+        run: |
+          cd client
+          TARGET_OS=linux TARGET_ARCH=amd64 npx vsce package -t linux-x64 -o vls-linux.vsix
+          rm -r bin
+
+      - name: Upload Linux x86_64 artifact
         uses: actions/upload-artifact@v3
         with:
           name: vls-linux-amd64
           path: client/vls-linux.vsix
 
-      - name: Upload Windows Artifact
+      - name: Build for Windows x86_64
+        run: |
+          cd client
+          TARGET_OS=windows TARGET_ARCH=amd64 npx vsce package -t win32-x64 -o vls-windows.vsix
+          rm -r bin
+
+      - name: Upload Windows x86_64 artifact
         uses: actions/upload-artifact@v3
         with:
           name: vls-windows-amd64
           path: client/vls-windows.vsix
 
-      - name: Upload Darwin Artifact
+      - name: Build for macOS x86_64
+        run: |
+          cd client
+          TARGET_OS=darwin TARGET_ARCH=amd64 npx vsce package -t darwin-x64 -o vls-darwin.vsix
+          rm -r bin
+
+      - name: Upload macOS x86_64 artifact
         uses: actions/upload-artifact@v3
         with:
           name: vls-darwin-amd64
