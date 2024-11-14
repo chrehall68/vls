@@ -20,6 +20,7 @@ jobs:
       - name: Build
         run: |
           cd client
+          npm install
           mkdir out
           TARGET_OS=windows TARGET_ARCH=amd64 npx vcse package -t linux-x64 -o vls-linux.vsix
           rm out/*
