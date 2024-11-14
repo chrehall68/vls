@@ -1,11 +1,7 @@
 import { ExtensionContext, ExtensionMode, workspace } from "vscode";
 
-import { createWriteStream, existsSync, mkdirSync } from "fs";
-import { chmod } from "fs/promises";
 import * as net from "net";
-import { sep } from "path";
-import { Readable } from "stream";
-import { finished } from "stream/promises";
+import * as path from "path";
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -14,55 +10,6 @@ import {
 } from "vscode-languageclient/node";
 
 let client: LanguageClient;
-
-async function downloadToBin(
-  ctx: ExtensionContext,
-  url: string,
-  filename: string
-) {
-  const res = await fetch(url);
-  if (!existsSync(ctx.asAbsolutePath("bin"))) {
-    mkdirSync(ctx.asAbsolutePath("bin"), { recursive: true });
-  }
-  const actualFileName = ctx.asAbsolutePath(`bin${sep}${filename}`);
-  const fileStream = createWriteStream(actualFileName, { flags: "wx" });
-  await finished(Readable.fromWeb(res.body).pipe(fileStream));
-}
-
-async function resolveServerExecutable(ctx: ExtensionContext): Promise<string> {
-  const version = "1.0.3";
-  const platformDetails = {
-    win32: {
-      url: `https://github.com/chrehall68/vls/releases/download/${version}/vls-windows-amd64.exe`,
-      filename: "vls.exe",
-      doChmod: false,
-    },
-    darwin: {
-      url: `https://github.com/chrehall68/vls/releases/download/${version}/vls-macos-amd64`,
-      filename: "vls",
-      doChmod: true,
-    },
-    linux: {
-      url: `https://github.com/chrehall68/vls/releases/download/${version}/vls-linux-amd64`,
-      filename: "vls",
-      doChmod: true,
-    },
-  };
-
-  const platform = process.platform;
-  if (!platformDetails[platform]) {
-    throw new Error(`Unsupported platform: ${platform}`);
-  }
-  const { url, filename, doChmod } = platformDetails[platform];
-  if (!existsSync(ctx.asAbsolutePath(`bin${sep}${filename}`))) {
-    await downloadToBin(ctx, url, filename);
-    if (doChmod) {
-      // make it executable; rx-rx-rx
-      await chmod(ctx.asAbsolutePath(`bin${sep}${filename}`), 0o555);
-    }
-  }
-  return ctx.asAbsolutePath(`bin${sep}${filename}`);
-}
 
 async function getServerOptions(ctx: ExtensionContext): Promise<ServerOptions> {
   if (ctx.extensionMode == ExtensionMode.Development) {
@@ -81,9 +28,13 @@ async function getServerOptions(ctx: ExtensionContext): Promise<ServerOptions> {
     };
   }
 
-  const executable = await resolveServerExecutable(ctx);
+  let filename = "verilog_language_server";
+  if (process.platform == "win32") {
+    filename += ".exe";
+  }
+
   return {
-    command: executable,
+    command: ctx.asAbsolutePath(path.join("bin", filename)),
     args: [],
   };
 }
