@@ -29,7 +29,7 @@ jobs:
           rm -r bin
 
       - name: Upload Linux x86_64 artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vls-linux-amd64
           path: client/vls-linux.vsix
@@ -41,7 +41,7 @@ jobs:
           rm -r bin
 
       - name: Upload Windows x86_64 artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vls-windows-amd64
           path: client/vls-windows.vsix
@@ -53,7 +53,7 @@ jobs:
           rm -r bin
 
       - name: Upload macOS x86_64 artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vls-darwin-amd64
           path: client/vls-darwin.vsix
