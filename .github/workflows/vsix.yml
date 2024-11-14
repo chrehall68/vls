@@ -22,11 +22,11 @@ jobs:
           cd client
           npm install
           mkdir out
-          TARGET_OS=windows TARGET_ARCH=amd64 npx vcse package -t linux-x64 -o vls-linux.vsix
+          TARGET_OS=windows TARGET_ARCH=amd64 npx vsce package -t linux-x64 -o vls-linux.vsix
           rm out/*
-          TARGET_OS=windows TARGET_ARCH=amd64 npx vcse package -t win32-x64 -o vls-windows.vsix
+          TARGET_OS=windows TARGET_ARCH=amd64 npx vsce package -t win32-x64 -o vls-windows.vsix
           rm out/*
-          TARGET_OS=windows TARGET_ARCH=amd64 npx vcse package -t darwin-x64 -o vls-darwin.vsix
+          TARGET_OS=windows TARGET_ARCH=amd64 npx vsce package -t darwin-x64 -o vls-darwin.vsix
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v3
