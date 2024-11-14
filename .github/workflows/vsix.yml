@@ -56,4 +56,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: vls-darwin-amd64
-          path: client/vls-macos.vsix
+          path: client/vls-darwin.vsix
