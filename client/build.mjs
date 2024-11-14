@@ -6,7 +6,7 @@ import * as process from "process";
 import { fileURLToPath } from 'url';
 
 function getExecutableFilename(basename) {
-  if (process.platform == "win32") {
+  if (process.env["GOOS"] == "windows") {
     return basename + ".exe";
   } else {
     return basename;
@@ -19,12 +19,15 @@ const dirname = path.dirname(filename);
 // cd to repository root
 process.chdir(path.join(dirname, ".."));
 
+// Misc resource files
 fsp.copyFile("README.md", path.join("client", "README.md"));
 fsp.copyFile("LICENSE", path.join("client", "LICENSE"));
 
 const goBuild = spawn(
   "go",
   ["build", "-o", path.resolve("client", "bin", getExecutableFilename("verilog_language_server"))],
+  // Target OS and architecture should be specified to the node process running this script, e.g.
+  // bash -c 'GOOS=windows GOARCH=amd64 node build.mjs'
   { cwd: "server" },
 );
 goBuild.on('exit', exitCode => {
