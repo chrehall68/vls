@@ -150,11 +150,7 @@ type CaseNode struct {
 }
 type TaskNode struct {
 	Identifier Token
-	Statements []TaskStatement
-}
-type TaskStatement struct {
-	InteriorNode *InteriorNode
-	BeginBlock   *BeginBlockNode
+	Statements []AlwaysStatement
 }
 type Parser struct {
 	skipTokens            []string
@@ -1637,26 +1633,6 @@ func (p *Parser) parseModuleInterior(tokens []Token, pos int) (result []Interior
 		newPos = pos
 	}
 }
-func (p *Parser) parseTaskInterior(tokens []Token, pos int) (result []TaskStatement, newPos int, err error) {
-	result = []TaskStatement{}
-	for {
-		nestedStatement, potentialPos, e := p.parseInteriorStatement(tokens, pos)
-		if e != nil {
-			// try to parse a begin block, which is legal in a task
-			beginBlock, potentialPos, e := p.parseBeginBlock(tokens, pos)
-			if e == nil {
-				result = append(result, TaskStatement{BeginBlock: &beginBlock})
-				pos = potentialPos
-			} else {
-				newPos = pos
-				return
-			}
-		} else {
-			result = append(result, TaskStatement{InteriorNode: &nestedStatement})
-			pos = potentialPos
-		}
-	}
-}
 func (p *Parser) parseTask(tokens []Token, pos int) (result TaskNode, newPos int, err error) {
 	pos, err = p.checkToken("task", []string{"task"}, pos, tokens)
 	if err != nil {
@@ -1677,7 +1653,7 @@ func (p *Parser) parseTask(tokens []Token, pos int) (result TaskNode, newPos int
 	}
 	pos++
 
-	result.Statements, pos, err = p.parseTaskInterior(tokens, pos)
+	result.Statements, pos, err = p.parseAlwaysStatements(tokens, pos)
 	if err != nil {
 		return
 	}
@@ -1947,17 +1923,6 @@ func getInteriorStatementsFromAlwaysStatement(statement AlwaysStatement) []Inter
 	}
 	return result
 }
-func getIteriorStatementsFromTaskNode(taskNode TaskNode) []InteriorNode {
-	var result []InteriorNode
-	for _, statement := range taskNode.Statements {
-		if statement.BeginBlock != nil {
-			result = append(result, getInteriorStatementsFromAlwaysStatements(statement.BeginBlock.Statements)...)
-		} else if statement.InteriorNode != nil {
-			result = append(result, getInteriorStatementsFromInteriorNode(*statement.InteriorNode)...)
-		}
-	}
-	return result
-}
 func getInteriorStatementsFromInteriorNode(interiorNode InteriorNode) []InteriorNode {
 	var result []InteriorNode
 	if interiorNode.AlwaysNode != nil {
@@ -1967,7 +1932,7 @@ func getInteriorStatementsFromInteriorNode(interiorNode InteriorNode) []Interior
 	} else if interiorNode.InitialNode != nil {
 		result = append(result, getInteriorStatementsFromAlwaysStatement(interiorNode.InitialNode.Statement)...)
 	} else if interiorNode.TaskNode != nil {
-		result = append(result, getIteriorStatementsFromTaskNode(*interiorNode.TaskNode)...)
+		result = append(result, getInteriorStatementsFromAlwaysStatements(interiorNode.TaskNode.Statements)...)
 	} else {
 		// this belongs to the result
 		result = append(result, interiorNode)
@@ -2021,17 +1986,6 @@ func getFunctionStatementsFromAlwaysStatement(statement AlwaysStatement) []Funct
 	}
 	return result
 }
-func getFunctionStatementsFromTaskNode(taskNode TaskNode) []FunctionNode {
-	var result []FunctionNode
-	for _, statement := range taskNode.Statements {
-		if statement.BeginBlock != nil {
-			result = append(result, getFunctionStatementsFromAlwaysStatements(statement.BeginBlock.Statements)...)
-		} else if statement.InteriorNode != nil {
-			result = append(result, getFunctionStatementsFromInteriorNode(*statement.InteriorNode)...)
-		}
-	}
-	return result
-}
 func getFunctionStatementsFromInteriorNode(interiorNode InteriorNode) []FunctionNode {
 	var result []FunctionNode
 	if interiorNode.AlwaysNode != nil {
@@ -2041,7 +1995,7 @@ func getFunctionStatementsFromInteriorNode(interiorNode InteriorNode) []Function
 	} else if interiorNode.InitialNode != nil {
 		result = append(result, getFunctionStatementsFromAlwaysStatement(interiorNode.InitialNode.Statement)...)
 	} else if interiorNode.TaskNode != nil {
-		result = append(result, getFunctionStatementsFromTaskNode(*interiorNode.TaskNode)...)
+		result = append(result, getFunctionStatementsFromAlwaysStatements(interiorNode.TaskNode.Statements)...)
 	}
 	return result
 }
@@ -2089,8 +2043,7 @@ Grammar:
 
 <interior> -> { <interior_statement> }
 <interior_statement>  -> <declaration> | <module_application> | <assignment> | <generate> | <always> | <defparam> | <initial> | <directive> | <task>
-<task_statement> -> <interior_statement> | <begin_block>
-<task> -> TASK <identifier> SEMICOLON <task_statement> ENDTASK [SEMICOLON]
+<task> -> TASK <identifier> SEMICOLON <always_statement> ENDTASK [SEMICOLON]
 
 <assignable> -> [LCURL] <single_var> {COMMA <single_var>} [RCURL]
 <assignment_without_semicolon> -> [ASSIGN] <assignable> (EQUAL | <=) <expr>
