@@ -40,6 +40,8 @@ func NewVLexer(logger *zap.Logger) *VLexer {
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^always`), "always")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((negedge)|(posedge))`), "time")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^default`), "default")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^task`), "task")
+	vlexer.AddMappingNoCapture(regexp.MustCompile(`^endtask`), "endtask")
 	// comparisons/assignments
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\=\=\=)|(\!\=\=)|(\=\=)|(\!\=)|(\<\=)|(>\=)|\>|\<)`), "comparator")
 	vlexer.AddMappingNoCapture(regexp.MustCompile(`^((\&\&)|(\|\|)|[\+\-\*\/\|&]|(\<\<)|(\>\>))`), "operator") // binary operators

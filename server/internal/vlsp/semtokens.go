@@ -78,6 +78,8 @@ func Encode(tokens []lang.Token) []uint32 {
 		"include":         3,
 		"timescale":       3,
 		"define":          3,
+		"task":            3,
+		"endtask":         3,
 		"identifier":      4,
 		"existing_module": 5,
 		"port":            6,

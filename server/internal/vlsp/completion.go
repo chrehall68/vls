@@ -17,7 +17,7 @@ func (h Handler) formatModuleApplication(module lang.ModuleNode) string {
 		params[i-2] = fmt.Sprintf(".%s($%d)", param.Value, i)
 		i++
 	}
-	return fmt.Sprintf("%s ${1:name} (%s);", module.Identifier.Value, strings.Join(params, ", "))
+	return fmt.Sprintf("%s ${1:name}(%s);", module.Identifier.Value, strings.Join(params, ", "))
 }
 
 func (h Handler) Completion(ctx context.Context, params *protocol.CompletionParams) (result *protocol.CompletionList, err error) {
