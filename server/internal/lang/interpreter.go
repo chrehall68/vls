@@ -101,10 +101,14 @@ func (i *Interpreter) diagnoseInteriorNode(node InteriorNode, curSymbols map[str
 	knownSymbols := curSymbols
 
 	if node.AssignmentNode != nil {
-		_, ok := knownSymbols[node.AssignmentNode.Identifier.Value]
-		if !ok {
-			i.addUnknownDiagnostic(node.AssignmentNode.Identifier, "variable")
+		for _, variable := range node.AssignmentNode.Variables {
+			_, ok := knownSymbols[variable.Identifier.Value]
+			if !ok {
+				i.addUnknownDiagnostic(variable.Identifier, "variable")
+			}
 		}
+		// also check the right hand side
+		i.diagnoseExpression(node.AssignmentNode.Value, knownSymbols)
 	} else if node.DeclarationNode != nil {
 		for _, variable := range node.DeclarationNode.Variables {
 			knownSymbols[variable.Identifier.Value] = true
