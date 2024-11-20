@@ -19,6 +19,8 @@ type InteriorNode struct {
 	AlwaysNode            *AlwaysNode
 	DefParamNode          *DefParamNode
 	InitialNode           *InitialNode
+	DirectiveNode         *DefineNode
+	TaskNode              *TaskNode
 }
 type ModuleNode struct {
 	Identifier Token        // name of module
@@ -35,8 +37,7 @@ type DirectiveNode struct {
 	DefineNode *DefineNode
 }
 type AssignmentNode struct {
-	Identifier      Token
-	Index           *IndexNode
+	Variables       []VariableNode
 	Value           ExprNode
 	IsAssign        bool
 	IsDelayedAssign bool // true if used <= instead of =
@@ -63,15 +64,15 @@ type DeclarationNode struct {
 }
 type VariableNode struct {
 	Identifier Token
-	Range      *RangeNode
+	Ranges     []RangeNode
 }
 type RangeNode struct {
 	From ExprNode
 	To   ExprNode
 }
 type TypeNode struct {
-	Type        Token
-	VectorRange *RangeNode
+	Type   Token
+	Ranges []RangeNode
 }
 type ModuleApplicationNode struct {
 	ModuleName Token  // name of the module
@@ -146,6 +147,10 @@ type CaseBlock struct {
 type CaseNode struct {
 	Conditions []ExprNode
 	Statement  AlwaysStatement
+}
+type TaskNode struct {
+	Identifier Token
+	Statements []AlwaysStatement
 }
 type Parser struct {
 	skipTokens            []string
@@ -243,29 +248,6 @@ func (p *Parser) parseRangeNode(tokens []Token, pos int) (result RangeNode, newP
 
 	// double check for rbracket
 	pos, err = p.checkToken("range node", []string{"rbracket"}, pos, tokens)
-	if err != nil {
-		return
-	}
-	pos++
-	newPos = pos
-	return
-}
-
-// returned position is the position after the rbracket
-func (p *Parser) parseIndexNode(tokens []Token, pos int) (result IndexNode, newPos int, err error) {
-	pos, err = p.checkToken("index node", []string{"lbracket"}, pos, tokens)
-	if err != nil {
-		return
-	}
-	pos++
-
-	indexNode, pos, err := p.parseExpression(tokens, pos)
-	if err != nil {
-		return
-	}
-	result.Index = indexNode
-
-	pos, err = p.checkToken("index node", []string{"rbracket"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -707,17 +689,59 @@ func (p *Parser) parseVariableNode(tokens []Token, pos int) (result VariableNode
 
 	// now try taking the range; it's ok if it fails since it's optional
 	rangeNode, potentialPos, e := p.parseRangeNode(tokens, pos)
-	if e == nil {
-		// success!
-		result.Range = &rangeNode
+	for e == nil {
+		result.Ranges = append(result.Ranges, rangeNode)
 		pos = potentialPos
+		rangeNode, potentialPos, e = p.parseRangeNode(tokens, pos) // try taking the next range
 	}
 	newPos = pos
 	return
 }
+func (p *Parser) parseAssignables(tokens []Token, pos int) (result []VariableNode, newPos int, err error) {
+	//	<assignable> -> [LCURL] <single_var> {COMMA <single_var>} [RCURL]
+	potentialPos, e := p.checkToken("assignables", []string{"lcurl"}, pos, tokens)
+	// it's ok if it fails since it's optional
+	needRcurl := false
+	if e == nil {
+		needRcurl = true
+		pos = potentialPos + 1
+	}
+
+	// get the first assignable
+	assignable, potentialPos, e := p.parseVariableNode(tokens, pos)
+	if e != nil { // first must succeed
+		err = e
+		return
+	}
+	result = append(result, assignable)
+	pos = potentialPos
+	// now try taking the rest
+	potentialPos, e = p.checkToken("assignables", []string{"comma"}, pos, tokens)
+	for e == nil {
+		assignable, potentialPos, e = p.parseVariableNode(tokens, potentialPos+1)
+		if e != nil {
+			err = e
+			return
+		}
+		result = append(result, assignable)
+		pos = potentialPos
+		potentialPos, e = p.checkToken("assignables", []string{"comma"}, pos, tokens)
+	}
+
+	if needRcurl {
+		// check for rcurl
+		pos, err = p.checkToken("assignables", []string{"rcurl"}, pos, tokens)
+		if err != nil {
+			return
+		}
+		pos++
+	}
+	newPos = pos
+	return
+
+}
 func (p *Parser) parseAssignmentNodeWithoutSemicolon(tokens []Token, pos int) (result AssignmentNode, newPos int, err error) {
-	// [ASSIGN] <identifier> [<index>] (EQUAL|<=) <expr>
-	// TODO - get the expr, not just a value
+	//<assignment_without_semicolon> -> [ASSIGN] <assignable> (EQUAL | <=) <expr>
 	potentialPos, e := p.checkToken("assignment", []string{"assign"}, pos, tokens)
 	// it's ok if it fails since it's optional
 	if e == nil {
@@ -725,20 +749,13 @@ func (p *Parser) parseAssignmentNodeWithoutSemicolon(tokens []Token, pos int) (r
 		result.IsAssign = true
 	}
 
-	pos, err = p.checkToken("assignment", []string{"identifier"}, pos, tokens)
-	if err != nil {
+	assignables, potentialPos, e := p.parseAssignables(tokens, pos)
+	if e != nil {
+		err = e
 		return
 	}
-	result.Identifier = tokens[pos]
-	pos++
-
-	// now try taking the index; it's ok if it fails since it's optional
-	indexNode, potentialPos, e := p.parseIndexNode(tokens, pos)
-	if e == nil {
-		// success!
-		result.Index = &indexNode
-		pos = potentialPos
-	}
+	result.Variables = assignables
+	pos = potentialPos
 
 	// check for equal
 	pos, err = p.checkToken("assignment", []string{"equal", "comparator"}, pos, tokens)
@@ -755,14 +772,13 @@ func (p *Parser) parseAssignmentNodeWithoutSemicolon(tokens []Token, pos int) (r
 
 	// get the value
 	valueNode, potentialPos, e := p.parseExpression(tokens, pos)
-	if e == nil {
-		// success!
-		result.Value = valueNode
-		pos = potentialPos
-	} else {
+	if e != nil {
 		// this is really an error since the value is required
-		// TODO - error handling
+		err = e
+		return
 	}
+	result.Value = valueNode
+	pos = potentialPos
 
 	newPos = pos
 	return
@@ -809,10 +825,10 @@ func (p *Parser) parseTypeNode(tokens []Token, pos int) (result TypeNode, newPos
 
 	// now try taking the range; it's ok if it fails since it's optional
 	rangeNode, potentialPos, e := p.parseRangeNode(tokens, pos)
-	if e == nil {
-		// success!
-		result.VectorRange = &rangeNode
+	for e == nil {
+		result.Ranges = append(result.Ranges, rangeNode)
 		pos = potentialPos
+		rangeNode, potentialPos, e = p.parseRangeNode(tokens, pos)
 	}
 	newPos = pos
 	return
@@ -1580,7 +1596,21 @@ func (p *Parser) parseInteriorStatement(tokens []Token, pos int) (result Interio
 								result.InitialNode = &initialNode
 								pos = potentialPos
 							} else {
-								err = e
+								// check if it's a directive
+								directiveNode, potentialPos, e := p.parseDirective(tokens, pos)
+								if e == nil {
+									result.DirectiveNode = directiveNode
+									pos = potentialPos
+								} else {
+									// check if it's a task
+									taskNode, potentialPos, e := p.parseTask(tokens, pos)
+									if e == nil {
+										result.TaskNode = &taskNode
+										pos = potentialPos
+									} else {
+										err = e
+									}
+								}
 							}
 						}
 					}
@@ -1602,6 +1632,40 @@ func (p *Parser) parseModuleInterior(tokens []Token, pos int) (result []Interior
 		pos = potentialPos
 		newPos = pos
 	}
+}
+func (p *Parser) parseTask(tokens []Token, pos int) (result TaskNode, newPos int, err error) {
+	pos, err = p.checkToken("task", []string{"task"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	pos, err = p.checkToken("task", []string{"identifier"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	result.Identifier = tokens[pos]
+	pos++
+
+	pos, err = p.checkToken("task", []string{"semicolon"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+
+	result.Statements, pos, err = p.parseAlwaysStatements(tokens, pos)
+	if err != nil {
+		return
+	}
+
+	// get endtask
+	pos, err = p.checkToken("task", []string{"endtask"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	pos++
+	newPos = pos
+	return
 }
 
 // ==============================
@@ -1867,6 +1931,8 @@ func getInteriorStatementsFromInteriorNode(interiorNode InteriorNode) []Interior
 		result = append(result, getInteriorStatementsFromAlwaysStatements(interiorNode.GenerateNode.Statements)...)
 	} else if interiorNode.InitialNode != nil {
 		result = append(result, getInteriorStatementsFromAlwaysStatement(interiorNode.InitialNode.Statement)...)
+	} else if interiorNode.TaskNode != nil {
+		result = append(result, getInteriorStatementsFromAlwaysStatements(interiorNode.TaskNode.Statements)...)
 	} else {
 		// this belongs to the result
 		result = append(result, interiorNode)
@@ -1928,6 +1994,8 @@ func getFunctionStatementsFromInteriorNode(interiorNode InteriorNode) []Function
 		result = append(result, getFunctionStatementsFromAlwaysStatements(interiorNode.GenerateNode.Statements)...)
 	} else if interiorNode.InitialNode != nil {
 		result = append(result, getFunctionStatementsFromAlwaysStatement(interiorNode.InitialNode.Statement)...)
+	} else if interiorNode.TaskNode != nil {
+		result = append(result, getFunctionStatementsFromAlwaysStatements(interiorNode.TaskNode.Statements)...)
 	}
 	return result
 }
@@ -1974,16 +2042,17 @@ Grammar:
 <ports> -> <identifier> { COMMA <identifier> }
 
 <interior> -> { <interior_statement> }
-<interior_statement>  -> <declaration> | <module_application> | <assignment> | <generate> | <always> | <defparam> | <initial>
+<interior_statement>  -> <declaration> | <module_application> | <assignment> | <generate> | <always> | <defparam> | <initial> | <directive> | <task>
+<task> -> TASK <identifier> SEMICOLON <always_statement> ENDTASK [SEMICOLON]
 
-<assignment_without_semicolon> -> [ASSIGN] <identifier> [<index>] (EQUAL | <=) <expr>
+<assignable> -> [LCURL] <single_var> {COMMA <single_var>} [RCURL]
+<assignment_without_semicolon> -> [ASSIGN] <assignable> (EQUAL | <=) <expr>
 <assignment> -> <assignment_without_semicolon> SEMICOLON
-<single_var> -> <identifier> [<range>]
+<single_var> -> <identifier> {<range>}
 
 <declaration> -> <type> <single_var> EQUAL <expr> { COMMA <single_var> EQUAL <expr> } SEMICOLON
 | <type> <single_var> { COMMA <single_var> } SEMICOLON
-<type> -> (TYPE | DIRECTION [TYPE]) [<range>]
-<index> -> LBRACKET <identifier> RBRACKET | LBRACKET <integer> RBRACKET
+<type> -> (TYPE | DIRECTION [TYPE]) {<range>}
 <range> -> LBRACKET <integer> COLON <integer> RBRACKET
 <integer> -> LITERAL | DEFINE
 

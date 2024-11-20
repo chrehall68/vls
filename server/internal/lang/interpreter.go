@@ -96,15 +96,70 @@ func (i *Interpreter) diagnoseExpression(node ExprNode, curSymbols map[string]bo
 		i.diagnoseExpression(*node.ExprFalse, curSymbols)
 	}
 }
-
-func (i *Interpreter) diagnoseInteriorNode(node InteriorNode, curSymbols map[string]bool) (newSymbols map[string]bool) {
+func (i *Interpreter) diagnoseAlwaysNode(node AlwaysStatement, curSymbols map[string]bool) map[string]bool {
+	knownSymbols := curSymbols
+	if node.BeginBlock != nil {
+		for _, statement := range node.BeginBlock.Statements {
+			knownSymbols = i.diagnoseAlwaysNode(statement, knownSymbols)
+		}
+	} else if node.CaseNode != nil {
+		i.diagnoseExpression(node.CaseNode.Expr, knownSymbols)
+		for _, case_ := range node.CaseNode.Cases {
+			for _, cond := range case_.Conditions {
+				i.diagnoseExpression(cond, knownSymbols)
+			}
+			knownSymbols = i.diagnoseAlwaysNode(case_.Statement, knownSymbols)
+		}
+	} else if node.ForBlock != nil {
+		if node.ForBlock.Initializer != nil {
+			i.diagnoseAssignmentNode(*node.ForBlock.Initializer, knownSymbols)
+		}
+		if node.ForBlock.Condition != nil {
+			i.diagnoseExpression(*node.ForBlock.Condition, knownSymbols)
+		}
+		if node.ForBlock.Incrementor != nil {
+			i.diagnoseAssignmentNode(*node.ForBlock.Incrementor, knownSymbols)
+		}
+		i.diagnoseAlwaysNode(node.ForBlock.Body, knownSymbols)
+	} else if node.FunctionNode != nil {
+		for _, arg := range node.FunctionNode.Expressions {
+			i.diagnoseExpression(arg, knownSymbols)
+		}
+	} else if node.IfBlock != nil {
+		i.diagnoseExpression(node.IfBlock.Expr, knownSymbols)
+		knownSymbols = i.diagnoseAlwaysNode(node.IfBlock.Body, knownSymbols)
+		if node.IfBlock.Else != nil {
+			knownSymbols = i.diagnoseAlwaysNode(*node.IfBlock.Else, knownSymbols)
+		}
+	} else if node.InteriorNode != nil {
+		knownSymbols = i.diagnoseInteriorNode(*node.InteriorNode, knownSymbols)
+	}
+	return knownSymbols
+}
+func (i *Interpreter) diagnoseAlwaysStatements(statements []AlwaysStatement, curSymbols map[string]bool) map[string]bool {
+	knownSymbols := curSymbols
+	for _, statement := range statements {
+		knownSymbols = i.diagnoseAlwaysNode(statement, knownSymbols)
+	}
+	return knownSymbols
+}
+func (i *Interpreter) diagnoseAssignmentNode(node AssignmentNode, curSymbols map[string]bool) map[string]bool {
+	knownSymbols := curSymbols
+	for _, variable := range node.Variables {
+		_, ok := knownSymbols[variable.Identifier.Value]
+		if !ok {
+			i.addUnknownDiagnostic(variable.Identifier, "variable")
+		}
+	}
+	// also check the right hand side
+	i.diagnoseExpression(node.Value, knownSymbols)
+	return knownSymbols
+}
+func (i *Interpreter) diagnoseInteriorNode(node InteriorNode, curSymbols map[string]bool) map[string]bool {
 	knownSymbols := curSymbols
 
 	if node.AssignmentNode != nil {
-		_, ok := knownSymbols[node.AssignmentNode.Identifier.Value]
-		if !ok {
-			i.addUnknownDiagnostic(node.AssignmentNode.Identifier, "variable")
-		}
+		i.diagnoseAssignmentNode(*node.AssignmentNode, knownSymbols)
 	} else if node.DeclarationNode != nil {
 		for _, variable := range node.DeclarationNode.Variables {
 			knownSymbols[variable.Identifier.Value] = true
@@ -131,10 +186,24 @@ func (i *Interpreter) diagnoseInteriorNode(node InteriorNode, curSymbols map[str
 				}
 			}
 		}
-	} // TODO - do the rest?
+	} else if node.AlwaysNode != nil {
+		knownSymbols = i.diagnoseAlwaysNode(node.AlwaysNode.Statement, knownSymbols)
+	} else if node.DefParamNode != nil {
+		i.diagnoseExpression(node.DefParamNode.Value, knownSymbols)
+		for _, variable := range node.DefParamNode.Identifiers {
+			knownSymbols[variable.Value] = true
+		}
+	} else if node.DirectiveNode != nil {
+		knownSymbols[node.DirectiveNode.Identifier.Value] = true
+	} else if node.GenerateNode != nil {
+		knownSymbols = i.diagnoseAlwaysStatements(node.GenerateNode.Statements, knownSymbols)
+	} else if node.InitialNode != nil {
+		i.diagnoseAlwaysNode(node.InitialNode.Statement, knownSymbols)
+	} else if node.TaskNode != nil {
+		knownSymbols = i.diagnoseAlwaysStatements(node.TaskNode.Statements, knownSymbols)
+	}
 
-	newSymbols = knownSymbols
-	return
+	return knownSymbols
 }
 
 func (i *Interpreter) diagnoseModule(module ModuleNode) {
