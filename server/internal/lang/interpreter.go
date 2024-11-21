@@ -150,6 +150,14 @@ func (i *Interpreter) diagnoseAssignmentNode(node AssignmentNode, curSymbols map
 		if !ok {
 			i.addUnknownDiagnostic(variable.Identifier, "variable")
 		}
+		for _, selector := range variable.Selectors {
+			if selector.IndexNode != nil {
+				i.diagnoseExpression(selector.IndexNode.Index, curSymbols)
+			} else if selector.RangeNode != nil {
+				i.diagnoseExpression(selector.RangeNode.From, curSymbols)
+				i.diagnoseExpression(selector.RangeNode.To, curSymbols)
+			}
+		}
 	}
 	// also check the right hand side
 	i.diagnoseExpression(node.Value, knownSymbols)
