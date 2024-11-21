@@ -37,10 +37,14 @@ type DirectiveNode struct {
 	DefineNode *DefineNode
 }
 type AssignmentNode struct {
-	Variables       []VariableNode
+	Variables       []AssignmentVariableNode
 	Value           ExprNode
 	IsAssign        bool
 	IsDelayedAssign bool // true if used <= instead of =
+}
+type AssignmentVariableNode struct {
+	Identifier Token
+	Selectors  []SelectorNode
 }
 type IndexNode struct {
 	Index ExprNode
@@ -697,7 +701,7 @@ func (p *Parser) parseVariableNode(tokens []Token, pos int) (result VariableNode
 	newPos = pos
 	return
 }
-func (p *Parser) parseAssignables(tokens []Token, pos int) (result []VariableNode, newPos int, err error) {
+func (p *Parser) parseAssignables(tokens []Token, pos int) (result []AssignmentVariableNode, newPos int, err error) {
 	//	<assignable> -> [LCURL] <single_var> {COMMA <single_var>} [RCURL]
 	potentialPos, e := p.checkToken("assignables", []string{"lcurl"}, pos, tokens)
 	// it's ok if it fails since it's optional
@@ -708,7 +712,7 @@ func (p *Parser) parseAssignables(tokens []Token, pos int) (result []VariableNod
 	}
 
 	// get the first assignable
-	assignable, potentialPos, e := p.parseVariableNode(tokens, pos)
+	assignable, potentialPos, e := p.parseAssignableVariable(tokens, pos)
 	if e != nil { // first must succeed
 		err = e
 		return
@@ -718,7 +722,7 @@ func (p *Parser) parseAssignables(tokens []Token, pos int) (result []VariableNod
 	// now try taking the rest
 	potentialPos, e = p.checkToken("assignables", []string{"comma"}, pos, tokens)
 	for e == nil {
-		assignable, potentialPos, e = p.parseVariableNode(tokens, potentialPos+1)
+		assignable, potentialPos, e = p.parseAssignableVariable(tokens, potentialPos+1)
 		if e != nil {
 			err = e
 			return
@@ -739,6 +743,25 @@ func (p *Parser) parseAssignables(tokens []Token, pos int) (result []VariableNod
 	newPos = pos
 	return
 
+}
+func (p *Parser) parseAssignableVariable(tokens []Token, pos int) (result AssignmentVariableNode, newPos int, err error) {
+	// <assignable_variable> -> <identifier> {<selector>}
+	pos, err = p.checkToken("assignmentvariable", []string{"identifier"}, pos, tokens)
+	if err != nil {
+		return
+	}
+	result.Identifier = tokens[pos]
+	pos++
+
+	// take selectors
+	selector, potentialPos, e := p.parseSelectorNode(tokens, pos)
+	for e == nil {
+		result.Selectors = append(result.Selectors, selector)
+		pos = potentialPos
+		selector, potentialPos, e = p.parseSelectorNode(tokens, pos)
+	}
+	newPos = pos
+	return
 }
 func (p *Parser) parseAssignmentNodeWithoutSemicolon(tokens []Token, pos int) (result AssignmentNode, newPos int, err error) {
 	//<assignment_without_semicolon> -> [ASSIGN] <assignable> (EQUAL | <=) <expr>
@@ -2046,6 +2069,7 @@ Grammar:
 <task> -> TASK <identifier> SEMICOLON <always_statement> ENDTASK [SEMICOLON]
 
 <assignable> -> [LCURL] <single_var> {COMMA <single_var>} [RCURL]
+<assignable_var> -> <identifier> {<selector>}
 <assignment_without_semicolon> -> [ASSIGN] <assignable> (EQUAL | <=) <expr>
 <assignment> -> <assignment_without_semicolon> SEMICOLON
 <single_var> -> <identifier> {<range>}
