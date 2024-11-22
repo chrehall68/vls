@@ -37,14 +37,14 @@ func (t Token) Line() int {
 // Lexer is a lexer
 type Lexer struct {
 	regexps []*regexp.Regexp
-	funcs   []func(string) (Token, error)
+	funcs   []func(string) ([]Token, error)
 	logger  *zap.Logger
 }
 
 func NewLexer(logger *zap.Logger) *Lexer {
 	return &Lexer{
 		regexps: []*regexp.Regexp{},
-		funcs:   []func(string) (Token, error){},
+		funcs:   []func(string) ([]Token, error){},
 		logger:  logger,
 	}
 }
@@ -52,7 +52,7 @@ func NewLexer(logger *zap.Logger) *Lexer {
 // AddMapping adds a mapping to the lexer
 // the pattern should probably start with a ^ to indicate
 // the start of the string
-func (l *Lexer) AddMapping(pattern *regexp.Regexp, mapper func(string) (Token, error)) {
+func (l *Lexer) AddMapping(pattern *regexp.Regexp, mapper func(string) ([]Token, error)) {
 	l.regexps = append(l.regexps, pattern)
 	l.funcs = append(l.funcs, mapper)
 }
@@ -60,8 +60,8 @@ func (l *Lexer) AddMapping(pattern *regexp.Regexp, mapper func(string) (Token, e
 // helper to make adding a mapping easier when you don't need to capture
 // the value
 func (l *Lexer) AddMappingNoCapture(pattern *regexp.Regexp, Type string) {
-	l.AddMapping(pattern, func(code string) (Token, error) {
-		return Token{Type: Type, Value: code}, nil
+	l.AddMapping(pattern, func(code string) ([]Token, error) {
+		return []Token{{Type: Type, Value: code}}, nil
 	})
 }
 
@@ -76,8 +76,8 @@ func (l *Lexer) Lex(code string) ([]Token, error) {
 		// the most characters, and match that token
 		// with the code
 		maxLength := 0
-		f := func(_ string) (Token, error) {
-			return Token{}, errors.New("no token found")
+		f := func(_ string) ([]Token, error) {
+			return []Token{}, errors.New("no token found")
 		}
 
 		// enforce order of precedence (mappings inserted first take precedence)
@@ -97,24 +97,28 @@ func (l *Lexer) Lex(code string) ([]Token, error) {
 		}
 
 		// now, match the token with the code
-		token, err := f(code[i : i+maxLength])
-		if err == nil { // don't add empty tokens
-			token.startCharacter = i - lineStart
-			token.endCharacter = i + maxLength - lineStart
-			token.line = line
-			tokens = append(tokens, token)
-		} else {
+		ts, err := f(code[i : i+maxLength])
+		if err != nil {
 			return nil, err
 		}
+		curPos := i
+		for _, t := range ts {
+			t.startCharacter = curPos - lineStart
+			t.endCharacter = curPos + len(t.Value) - lineStart
+			t.line = line
+			tokens = append(tokens, t)
 
-		// update line info and i
-		for j := 0; j < maxLength; j++ {
-			if code[i+j] == '\n' {
-				line++
-				lineStart = i + j + 1
+			// update line info and i
+			for j := 0; j < len(t.Value); j++ {
+				if code[curPos+j] == '\n' {
+					line++
+					lineStart = curPos + j + 1
+				}
 			}
+			curPos += len(t.Value)
 		}
 		i += maxLength
+
 	}
 
 	return tokens, nil

@@ -28,9 +28,8 @@ func (h Handler) getLocationDetails(fname string, line int, character int) (*Loc
 		// keep track of which module we're inside
 		if strings.Contains(lineString, "module") {
 			tokens, err := lexer.Lex(lineString)
-			h.state.log.Sugar().Info("lineTOkens: ", tokens)
+			h.state.log.Sugar().Info("lineTokens: ", tokens)
 			if err == nil {
-				h.state.log.Sugar().Info("Ok so far: ")
 				for i := range tokens {
 					if tokens[i].Type == "module" {
 						// new module?
@@ -69,7 +68,6 @@ func (h Handler) jumpTo(fname string, line int, character int) ([]protocol.Locat
 	result := []protocol.Location{}
 	if details.token.Type == "identifier" {
 		// see if it's a module or definition
-		h.state.log.Sugar().Info("now looking for", details.token.Value)
 		location, ok := h.state.symbolMap[details.token.Value]
 		if ok {
 			result = append(result, location)
@@ -77,7 +75,6 @@ func (h Handler) jumpTo(fname string, line int, character int) ([]protocol.Locat
 			// otherwise, maybe it's a variable
 			moduleMap, ok := h.state.variableDefinitions[details.currentModule]
 			if ok {
-				h.state.log.Sugar().Info("moduleMap: ", moduleMap)
 				// look for variable definition
 				location, ok := moduleMap[details.token.Value]
 				if ok {
