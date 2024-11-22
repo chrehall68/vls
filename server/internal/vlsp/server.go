@@ -10,14 +10,15 @@ import (
 )
 
 type ServerState struct {
-	workspace string
-	modules   map[string][]lang.ModuleNode // list of all modules, grouped by file (w/o the file://)
-	defines   map[string][]lang.DefineNode // list of all defines, grouped by file (w/o the file://)
-	symbolMap map[string]protocol.Location // map of symbol names to their location (path w/ the file://)
-	files     map[string]*File             // map of file names (w/o the file://) to corresponding File objects
-	log       *zap.Logger
-	stream    *jsonrpc2.Stream
-	client    protocol.Client
+	workspace           string
+	modules             map[string][]lang.ModuleNode              // list of all modules, grouped by file (w/o the file://)
+	defines             map[string][]lang.DefineNode              // list of all defines, grouped by file (w/o the file://)
+	symbolMap           map[string]protocol.Location              // map of symbol names to their location (path w/ the file://)
+	files               map[string]*File                          // map of file names (w/o the file://) to corresponding File objects
+	variableDefinitions map[string](map[string]protocol.Location) // map of module name : (variable name: declaration)
+	log                 *zap.Logger
+	stream              *jsonrpc2.Stream
+	client              protocol.Client
 }
 
 type Handler struct {
@@ -38,13 +39,14 @@ func NewHandler(ctx context.Context, server protocol.Server, client protocol.Cli
 	return Handler{
 		Server: server,
 		state: &ServerState{
-			workspace: "",
-			modules:   map[string][]lang.ModuleNode{},
-			defines:   map[string][]lang.DefineNode{},
-			log:       logger,
-			stream:    stream,
-			client:    client,
-			files:     map[string]*File{}}}, ctx, nil
+			workspace:           "",
+			modules:             map[string][]lang.ModuleNode{},
+			defines:             map[string][]lang.DefineNode{},
+			variableDefinitions: map[string](map[string]protocol.Location){},
+			log:                 logger,
+			stream:              stream,
+			client:              client,
+			files:               map[string]*File{}}}, ctx, nil
 }
 
 func (h Handler) Initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {

@@ -40,8 +40,9 @@ func (h Handler) GetSymbolsForFile(fname string, firstTime bool) {
 	results, err := parser.ParseFile(tokens)
 	if err != nil {
 		h.state.log.Sugar().Errorf("error parsing file %s: %s", fname, err)
-		h.state.defines[fname] = []lang.DefineNode{}
-		h.state.modules[fname] = []lang.ModuleNode{}
+		// let's not clear anything for now...
+		//h.state.defines[fname] = []lang.DefineNode{}
+		//h.state.modules[fname] = []lang.ModuleNode{}
 
 		// publish the error as a diagnostic
 		if parser.FarthestErrorPosition >= 0 && parser.FarthestErrorPosition < len(tokens) {
@@ -69,14 +70,36 @@ func (h Handler) GetSymbolsForFile(fname string, firstTime bool) {
 			h.state.client.PublishDiagnostics(context.Background(), &obj)
 		}
 	} else {
+		// reset maps for this file
+		h.state.defines[fname] = []lang.DefineNode{}
+		h.state.modules[fname] = []lang.ModuleNode{}
+
+		// store all modules that way we can easily go to definition
 		for _, statement := range results.Statements {
 			if statement.Module != nil {
 				h.state.modules[fname] = append(h.state.modules[fname], *statement.Module)
+
+				// clear the existing variable definitions
+				moduleName := statement.Module.Identifier.Value
+				h.state.variableDefinitions[moduleName] = map[string]protocol.Location{}
+				// and also store all variable definitions inside the module
+				for _, statement := range lang.GetInteriorStatementsFromModule(*statement.Module) {
+					if statement.DeclarationNode != nil {
+						for _, v := range statement.DeclarationNode.Variables {
+							h.state.variableDefinitions[moduleName][v.Identifier.Value] = protocol.Location{
+								URI: protocol.DocumentURI(PathToURI(fname)),
+								Range: protocol.Range{
+									Start: protocol.Position{Line: uint32(v.Identifier.Line()), Character: uint32(v.Identifier.StartCharacter())},
+									End:   protocol.Position{Line: uint32(v.Identifier.Line()), Character: uint32(v.Identifier.EndCharacter())}},
+							}
+						}
+					}
+				}
 			} else if statement.Directive != nil && statement.Directive.DefineNode != nil {
 				h.state.defines[fname] = append(h.state.defines[fname], *statement.Directive.DefineNode)
 			}
 		}
-
+		// store all known global symbols (modules and defines)
 		for _, module := range h.state.modules[fname] {
 			h.state.symbolMap[module.Identifier.Value] = protocol.Location{
 				URI: protocol.DocumentURI(PathToURI(fname)),
@@ -92,7 +115,6 @@ func (h Handler) GetSymbolsForFile(fname string, firstTime bool) {
 					Start: protocol.Position{Line: uint32(define.Identifier.Line()), Character: uint32(define.Identifier.StartCharacter())},
 					End:   protocol.Position{Line: uint32(define.Identifier.Line()), Character: uint32(define.Identifier.EndCharacter())}},
 			}
-
 		}
 
 		// get diagnostics
