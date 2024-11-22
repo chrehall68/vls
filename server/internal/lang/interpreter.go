@@ -217,7 +217,7 @@ func (i *Interpreter) diagnoseInteriorNode(node InteriorNode, curSymbols map[str
 func (i *Interpreter) diagnoseModule(module ModuleNode) {
 	knownSymbols := map[string]bool{}
 	for _, define := range i.defines {
-		knownSymbols[define.Identifier.Value] = true
+		knownSymbols["`"+define.Identifier.Value] = true
 	}
 	for _, statement := range module.Interior {
 		knownSymbols = i.diagnoseInteriorNode(statement, knownSymbols)
