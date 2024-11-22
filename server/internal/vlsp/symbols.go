@@ -109,7 +109,8 @@ func (h Handler) GetSymbolsForFile(fname string, firstTime bool) {
 			}
 		}
 		for _, define := range h.state.defines[fname] {
-			h.state.symbolMap[define.Identifier.Value] = protocol.Location{
+			// explicitly add the backticks for defines
+			h.state.symbolMap["`"+define.Identifier.Value] = protocol.Location{
 				URI: protocol.DocumentURI(PathToURI(fname)),
 				Range: protocol.Range{
 					Start: protocol.Position{Line: uint32(define.Identifier.Line()), Character: uint32(define.Identifier.StartCharacter())},
