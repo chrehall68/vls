@@ -31,11 +31,12 @@ func GetSemanticTokensOptions() SemanticTokensOptions {
 				protocol.SemanticTokenType,      // 0
 				protocol.SemanticTokenComment,   // 1
 				protocol.SemanticTokenNumber,    // 2
-				protocol.SemanticTokenMacro,     // 3
+				protocol.SemanticTokenKeyword,   // 3
 				protocol.SemanticTokenVariable,  // 4
 				protocol.SemanticTokenClass,     // 5
 				protocol.SemanticTokenParameter, // 6
 				protocol.SemanticTokenFunction,  // 7
+				protocol.SemanticTokenMacro,     // 8
 			},
 			TokenModifiers: []protocol.SemanticTokenModifiers{},
 		},
@@ -44,7 +45,7 @@ func GetSemanticTokensOptions() SemanticTokensOptions {
 	}
 }
 
-func Encode(tokens []lang.Token) []uint32 {
+func (h Handler) Encode(tokens []lang.Token) []uint32 {
 	result := []uint32{}
 	prevLine := 0
 	prevCharacter := 0
@@ -87,6 +88,14 @@ func Encode(tokens []lang.Token) []uint32 {
 		"signed":          7,
 		"dollar":          7,
 		"pound":           7,
+		// 8 is reserved for defined identifiers
+	}
+	// flattened defines
+	flattenedDefines := map[string]bool{}
+	for _, defines := range h.state.defines {
+		for _, def := range defines {
+			flattenedDefines["`"+def.Identifier.Value] = true
+		}
 	}
 
 	addToken := func(token lang.Token) {
@@ -96,6 +105,12 @@ func Encode(tokens []lang.Token) []uint32 {
 			// if it's a new line, don't worry about character
 			if token.Line() != prevLine {
 				prevCharacter = 0
+			}
+
+			// special case for defined identifiers
+			_, ok := flattenedDefines[token.Value]
+			if token.Type == "identifier" && ok {
+				val = 8
 			}
 
 			// add into result
@@ -177,7 +192,7 @@ func (h Handler) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 
 	// encode
 	result := &protocol.SemanticTokens{
-		Data: Encode(tokens),
+		Data: h.Encode(tokens),
 	}
 	h.state.log.Sugar().Info("SemanticTokensFull result: ", result)
 
