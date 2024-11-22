@@ -58,6 +58,16 @@ func (h Handler) Completion(ctx context.Context, params *protocol.CompletionPara
 			InsertText: keyword,
 		})
 	}
+	for snippetName, snippet := range lang.Snippets {
+		completionItems = append(completionItems, protocol.CompletionItem{
+			Label:            snippetName,
+			Detail:           "snippet",
+			InsertText:       snippet,
+			InsertTextFormat: protocol.InsertTextFormatSnippet,
+		})
+	}
+
+	// local-level completions
 	details, err := h.getLocationDetails(URIToPath(string(params.TextDocument.URI)), int(params.Position.Line), int(params.Position.Character))
 	if err == nil {
 		for name := range h.state.variableDefinitions[details.currentModule] {
