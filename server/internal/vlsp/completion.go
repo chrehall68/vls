@@ -24,12 +24,12 @@ func (h Handler) Completion(ctx context.Context, params *protocol.CompletionPara
 	h.state.log.Sugar().Infof("Completion called")
 	var completionItems []protocol.CompletionItem
 
+	// global-level completions
 	for word, emoji := range mappers.EmojiMapper {
-		emojiCopy := emoji // Create a copy of emoji
 		completionItems = append(completionItems, protocol.CompletionItem{
 			Label:      word,
-			Detail:     emojiCopy,
-			InsertText: emojiCopy,
+			Detail:     emoji,
+			InsertText: emoji,
 		})
 	}
 	for _, defines := range h.state.defines {
@@ -48,6 +48,23 @@ func (h Handler) Completion(ctx context.Context, params *protocol.CompletionPara
 				Detail:           "module",
 				InsertText:       h.formatModuleApplication(module),
 				InsertTextFormat: protocol.InsertTextFormatSnippet,
+			})
+		}
+	}
+	for _, keyword := range lang.Keywords {
+		completionItems = append(completionItems, protocol.CompletionItem{
+			Label:      keyword,
+			Detail:     "keyword",
+			InsertText: keyword,
+		})
+	}
+	details, err := h.getLocationDetails(URIToPath(string(params.TextDocument.URI)), int(params.Position.Line), int(params.Position.Character))
+	if err == nil {
+		for name := range h.state.variableDefinitions[details.currentModule] {
+			completionItems = append(completionItems, protocol.CompletionItem{
+				Label:      name,
+				Detail:     "variable",
+				InsertText: name,
 			})
 		}
 	}
