@@ -196,7 +196,7 @@ func (p *Parser) skip(tokens []Token, skippables []string, pos int) int {
 }
 
 // returned position is the position of the expected (or failed) token
-func (p *Parser) checkToken(from string, expected []string, pos int, tokens []Token) (int, error) {
+func (p *Parser) CheckToken(from string, expected []string, pos int, tokens []Token) (int, error) {
 	// skip over any skippables
 	pos = p.skip(tokens, p.skipTokens, pos)
 
@@ -223,7 +223,7 @@ func (p *Parser) isEOF(tokens []Token, pos int) bool {
 
 // returned position is the position after the rbracket
 func (p *Parser) parseRangeNode(tokens []Token, pos int) (result RangeNode, newPos int, err error) {
-	pos, err = p.checkToken("range node", []string{"lbracket"}, pos, tokens)
+	pos, err = p.CheckToken("range node", []string{"lbracket"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -237,7 +237,7 @@ func (p *Parser) parseRangeNode(tokens []Token, pos int) (result RangeNode, newP
 	result.From = fromNode
 
 	// double check for colon
-	pos, err = p.checkToken("range node", []string{"colon"}, pos, tokens)
+	pos, err = p.CheckToken("range node", []string{"colon"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -251,7 +251,7 @@ func (p *Parser) parseRangeNode(tokens []Token, pos int) (result RangeNode, newP
 	result.To = toNode
 
 	// double check for rbracket
-	pos, err = p.checkToken("range node", []string{"rbracket"}, pos, tokens)
+	pos, err = p.CheckToken("range node", []string{"rbracket"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -263,7 +263,7 @@ func (p *Parser) parseRangeNode(tokens []Token, pos int) (result RangeNode, newP
 // <selector> -> LBRACKET <expr> [COLON <expr>] RBRACKET
 func (p *Parser) parseSelectorNode(tokens []Token, pos int) (result SelectorNode, newPos int, err error) {
 	// check for lbracket
-	pos, err = p.checkToken("selector node", []string{"lbracket"}, pos, tokens)
+	pos, err = p.CheckToken("selector node", []string{"lbracket"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -275,7 +275,7 @@ func (p *Parser) parseSelectorNode(tokens []Token, pos int) (result SelectorNode
 	}
 
 	// check for colon
-	potentialPos, e := p.checkToken("selector node", []string{"colon"}, pos, tokens)
+	potentialPos, e := p.CheckToken("selector node", []string{"colon"}, pos, tokens)
 	if e == nil {
 		// had a colon, so extract the second
 		pos = potentialPos
@@ -293,7 +293,7 @@ func (p *Parser) parseSelectorNode(tokens []Token, pos int) (result SelectorNode
 	}
 
 	// check for rbracket
-	pos, err = p.checkToken("selector node", []string{"rbracket"}, pos, tokens)
+	pos, err = p.CheckToken("selector node", []string{"rbracket"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -306,7 +306,7 @@ func (p *Parser) parseSelectorNode(tokens []Token, pos int) (result SelectorNode
 // <sized_value> -> [ LITERAL ] LCURL <sized_value> { COMMA <sized_value> } RCURL | <value>
 func (p *Parser) parseSized(tokens []Token, pos int) (result SizedValueNode, newPos int, err error) {
 	// seems to be a sized value
-	potentialPos, e := p.checkToken("sized value", []string{"literal", "identifier"}, pos, tokens)
+	potentialPos, e := p.CheckToken("sized value", []string{"literal", "identifier"}, pos, tokens)
 	if e == nil {
 		// there was a size
 		result.Size = &tokens[potentialPos]
@@ -314,7 +314,7 @@ func (p *Parser) parseSized(tokens []Token, pos int) (result SizedValueNode, new
 	}
 
 	// now take the lcurl
-	pos, err = p.checkToken("sized value", []string{"lcurl"}, pos, tokens)
+	pos, err = p.CheckToken("sized value", []string{"lcurl"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -333,7 +333,7 @@ func (p *Parser) parseSized(tokens []Token, pos int) (result SizedValueNode, new
 		result.Values = append(result.Values, sizedNode.Values...)
 		pos = potentialPos
 
-		potentialPos, e = p.checkToken("sized value", []string{"comma"}, pos, tokens)
+		potentialPos, e = p.CheckToken("sized value", []string{"comma"}, pos, tokens)
 		if e != nil {
 			break
 		}
@@ -341,7 +341,7 @@ func (p *Parser) parseSized(tokens []Token, pos int) (result SizedValueNode, new
 	}
 
 	// take the rcurl
-	pos, err = p.checkToken("sized value", []string{"rcurl"}, pos, tokens)
+	pos, err = p.CheckToken("sized value", []string{"rcurl"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -373,13 +373,13 @@ func (p *Parser) parseSizedValueNode(tokens []Token, pos int) (result SizedValue
 
 // <maybe_signed> -> <sized_value> | SIGNED LPAREN <sized_value> RPAREN
 func (p *Parser) parseSigned(tokens []Token, pos int) (result SizedValueNode, newPos int, err error) {
-	potentialPos, e := p.checkToken("signed", []string{"signed"}, pos, tokens)
+	potentialPos, e := p.CheckToken("signed", []string{"signed"}, pos, tokens)
 	if e == nil {
 		// it was signed
 		pos = potentialPos + 1
 
 		// take lparen
-		pos, err = p.checkToken("signed", []string{"lparen"}, pos, tokens)
+		pos, err = p.CheckToken("signed", []string{"lparen"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -392,7 +392,7 @@ func (p *Parser) parseSigned(tokens []Token, pos int) (result SizedValueNode, ne
 		}
 
 		// take rparen
-		pos, err = p.checkToken("signed", []string{"rparen"}, pos, tokens)
+		pos, err = p.CheckToken("signed", []string{"rparen"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -411,7 +411,7 @@ func (p *Parser) parseValueNode(tokens []Token, pos int) (result ValueNode, newP
 	// <value> -> [TILDE| - ] (LITERAL|(<identifier> { DOT <identifier> })|FUNCLITERAL) { <selector> }
 
 	// get optional tilde or minus
-	potentialPos, e := p.checkToken("value node", []string{"tilde", "operator"}, pos, tokens)
+	potentialPos, e := p.CheckToken("value node", []string{"tilde", "operator"}, pos, tokens)
 	if e == nil {
 		// there was some sort of unary operator
 		if tokens[potentialPos].Type == "operator" && tokens[potentialPos].Value != "-" {
@@ -421,7 +421,7 @@ func (p *Parser) parseValueNode(tokens []Token, pos int) (result ValueNode, newP
 		pos = potentialPos + 1
 	}
 
-	pos, err = p.checkToken("value node", []string{"identifier", "literal", "funcliteral"}, pos, tokens)
+	pos, err = p.CheckToken("value node", []string{"identifier", "literal", "funcliteral"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -430,16 +430,16 @@ func (p *Parser) parseValueNode(tokens []Token, pos int) (result ValueNode, newP
 	if tokens[pos].Type == "identifier" {
 		pos++
 		// potentially take the next identifiers
-		potentialPos, e = p.checkToken("value node", []string{"dot"}, pos, tokens)
+		potentialPos, e = p.CheckToken("value node", []string{"dot"}, pos, tokens)
 		for e == nil {
 			// take the identifier
-			pos, err = p.checkToken("value node", []string{"identifier"}, potentialPos+1, tokens)
+			pos, err = p.CheckToken("value node", []string{"identifier"}, potentialPos+1, tokens)
 			if err != nil {
 				return
 			}
 			result.Value = append(result.Value, tokens[pos])
 			pos++
-			potentialPos, e = p.checkToken("value node", []string{"dot"}, pos, tokens)
+			potentialPos, e = p.CheckToken("value node", []string{"dot"}, pos, tokens)
 		}
 	} else {
 		pos++
@@ -460,7 +460,7 @@ func (p *Parser) parseValueNode(tokens []Token, pos int) (result ValueNode, newP
 func (p *Parser) parseExpression(tokens []Token, pos int) (result ExprNode, newPos int, err error) {
 	// <expr> -> (<value> | LPAREN <expr> RPAREN) [(OPERATOR|COMPARATOR) <expr>]  [ QUESTION <expr> COLON <expr> ]
 
-	potentialPos, e := p.checkToken("expression", []string{"lparen"}, pos, tokens)
+	potentialPos, e := p.CheckToken("expression", []string{"lparen"}, pos, tokens)
 	if e == nil {
 		// nested expression
 		pos = potentialPos + 1
@@ -469,7 +469,7 @@ func (p *Parser) parseExpression(tokens []Token, pos int) (result ExprNode, newP
 			return
 		}
 		// check for rparen
-		pos, err = p.checkToken("expression", []string{"rparen"}, pos, tokens)
+		pos, err = p.CheckToken("expression", []string{"rparen"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -486,7 +486,7 @@ func (p *Parser) parseExpression(tokens []Token, pos int) (result ExprNode, newP
 	}
 
 	// check for operator
-	potentialPos, e = p.checkToken("expression", []string{"operator", "comparator"}, pos, tokens)
+	potentialPos, e = p.CheckToken("expression", []string{"operator", "comparator"}, pos, tokens)
 	if e == nil {
 		// had an operator or comparator
 		pos = potentialPos
@@ -504,7 +504,7 @@ func (p *Parser) parseExpression(tokens []Token, pos int) (result ExprNode, newP
 	}
 
 	// check for ternary
-	potentialPos, e = p.checkToken("expression", []string{"question"}, pos, tokens)
+	potentialPos, e = p.CheckToken("expression", []string{"question"}, pos, tokens)
 	if e == nil {
 		// get the true expression
 		pos = potentialPos + 1
@@ -517,7 +517,7 @@ func (p *Parser) parseExpression(tokens []Token, pos int) (result ExprNode, newP
 		pos = potentialPos
 
 		// need a colon
-		pos, err = p.checkToken("expression", []string{"colon"}, pos, tokens)
+		pos, err = p.CheckToken("expression", []string{"colon"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -539,14 +539,14 @@ func (p *Parser) parseExpression(tokens []Token, pos int) (result ExprNode, newP
 
 func (p *Parser) parseArgument(tokens []Token, pos int) (result ArgumentNode, newPos int, err error) {
 	// dot for named parameter, identifier/lcurcly/literal for value
-	pos, err = p.checkToken("argument", []string{"dot", "identifier", "lcurl", "literal"}, pos, tokens)
+	pos, err = p.CheckToken("argument", []string{"dot", "identifier", "lcurl", "literal"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	if tokens[pos].Type == "dot" {
 		// named parameter
 		pos++
-		pos, err = p.checkToken("argument", []string{"identifier"}, pos, tokens)
+		pos, err = p.CheckToken("argument", []string{"identifier"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -554,7 +554,7 @@ func (p *Parser) parseArgument(tokens []Token, pos int) (result ArgumentNode, ne
 		pos++
 
 		// check for lparen
-		pos, err = p.checkToken("argument", []string{"lparen"}, pos, tokens)
+		pos, err = p.CheckToken("argument", []string{"lparen"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -572,7 +572,7 @@ func (p *Parser) parseArgument(tokens []Token, pos int) (result ArgumentNode, ne
 		}
 
 		// check for rparen
-		pos, err = p.checkToken("argument", []string{"rparen"}, pos, tokens)
+		pos, err = p.CheckToken("argument", []string{"rparen"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -607,7 +607,7 @@ func (p *Parser) parseArguments(tokens []Token, pos int) (result []ArgumentNode,
 	}
 
 	// now take the rest
-	potentialPos, e = p.checkToken("arguments", []string{"comma"}, pos, tokens)
+	potentialPos, e = p.CheckToken("arguments", []string{"comma"}, pos, tokens)
 	for e == nil {
 		argument, potentialPos, e = p.parseArgument(tokens, potentialPos+1) // potentialPos was position of comma
 		if e == nil {
@@ -619,14 +619,14 @@ func (p *Parser) parseArguments(tokens []Token, pos int) (result []ArgumentNode,
 			err = e
 			return
 		}
-		potentialPos, e = p.checkToken("arguments", []string{"comma"}, pos, tokens)
+		potentialPos, e = p.CheckToken("arguments", []string{"comma"}, pos, tokens)
 	}
 	newPos = pos
 	return
 }
 func (p *Parser) parseModuleApplication(tokens []Token, pos int) (result ModuleApplicationNode, newPos int, err error) {
 	// module name
-	pos, err = p.checkToken("module application", []string{"identifier"}, pos, tokens)
+	pos, err = p.CheckToken("module application", []string{"identifier"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -634,7 +634,7 @@ func (p *Parser) parseModuleApplication(tokens []Token, pos int) (result ModuleA
 	pos++
 
 	// might have a gate name
-	potentialPos, e := p.checkToken("module application", []string{"identifier"}, pos, tokens)
+	potentialPos, e := p.CheckToken("module application", []string{"identifier"}, pos, tokens)
 	if e == nil {
 		result.GateName = &tokens[potentialPos]
 		pos = potentialPos + 1
@@ -648,7 +648,7 @@ func (p *Parser) parseModuleApplication(tokens []Token, pos int) (result ModuleA
 	}
 
 	// check for lparen
-	pos, err = p.checkToken("module application", []string{"lparen"}, pos, tokens)
+	pos, err = p.CheckToken("module application", []string{"lparen"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -666,14 +666,14 @@ func (p *Parser) parseModuleApplication(tokens []Token, pos int) (result ModuleA
 	}
 
 	// check for rparen
-	pos, err = p.checkToken("module application", []string{"rparen"}, pos, tokens)
+	pos, err = p.CheckToken("module application", []string{"rparen"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// check for semicolon
-	pos, err = p.checkToken("module application", []string{"semicolon"}, pos, tokens)
+	pos, err = p.CheckToken("module application", []string{"semicolon"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -684,7 +684,7 @@ func (p *Parser) parseModuleApplication(tokens []Token, pos int) (result ModuleA
 
 func (p *Parser) parseVariableNode(tokens []Token, pos int) (result VariableNode, newPos int, err error) {
 	// identifier optionally followed by a range
-	pos, err = p.checkToken("variable", []string{"identifier"}, pos, tokens)
+	pos, err = p.CheckToken("variable", []string{"identifier"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -703,7 +703,7 @@ func (p *Parser) parseVariableNode(tokens []Token, pos int) (result VariableNode
 }
 func (p *Parser) parseAssignables(tokens []Token, pos int) (result []AssignmentVariableNode, newPos int, err error) {
 	//	<assignable> -> [LCURL] <single_var> {COMMA <single_var>} [RCURL]
-	potentialPos, e := p.checkToken("assignables", []string{"lcurl"}, pos, tokens)
+	potentialPos, e := p.CheckToken("assignables", []string{"lcurl"}, pos, tokens)
 	// it's ok if it fails since it's optional
 	needRcurl := false
 	if e == nil {
@@ -720,7 +720,7 @@ func (p *Parser) parseAssignables(tokens []Token, pos int) (result []AssignmentV
 	result = append(result, assignable)
 	pos = potentialPos
 	// now try taking the rest
-	potentialPos, e = p.checkToken("assignables", []string{"comma"}, pos, tokens)
+	potentialPos, e = p.CheckToken("assignables", []string{"comma"}, pos, tokens)
 	for e == nil {
 		assignable, potentialPos, e = p.parseAssignableVariable(tokens, potentialPos+1)
 		if e != nil {
@@ -729,12 +729,12 @@ func (p *Parser) parseAssignables(tokens []Token, pos int) (result []AssignmentV
 		}
 		result = append(result, assignable)
 		pos = potentialPos
-		potentialPos, e = p.checkToken("assignables", []string{"comma"}, pos, tokens)
+		potentialPos, e = p.CheckToken("assignables", []string{"comma"}, pos, tokens)
 	}
 
 	if needRcurl {
 		// check for rcurl
-		pos, err = p.checkToken("assignables", []string{"rcurl"}, pos, tokens)
+		pos, err = p.CheckToken("assignables", []string{"rcurl"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -746,7 +746,7 @@ func (p *Parser) parseAssignables(tokens []Token, pos int) (result []AssignmentV
 }
 func (p *Parser) parseAssignableVariable(tokens []Token, pos int) (result AssignmentVariableNode, newPos int, err error) {
 	// <assignable_variable> -> <identifier> {<selector>}
-	pos, err = p.checkToken("assignmentvariable", []string{"identifier"}, pos, tokens)
+	pos, err = p.CheckToken("assignmentvariable", []string{"identifier"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -765,7 +765,7 @@ func (p *Parser) parseAssignableVariable(tokens []Token, pos int) (result Assign
 }
 func (p *Parser) parseAssignmentNodeWithoutSemicolon(tokens []Token, pos int) (result AssignmentNode, newPos int, err error) {
 	//<assignment_without_semicolon> -> [ASSIGN] <assignable> (EQUAL | <=) <expr>
-	potentialPos, e := p.checkToken("assignment", []string{"assign"}, pos, tokens)
+	potentialPos, e := p.CheckToken("assignment", []string{"assign"}, pos, tokens)
 	// it's ok if it fails since it's optional
 	if e == nil {
 		pos = potentialPos + 1
@@ -781,7 +781,7 @@ func (p *Parser) parseAssignmentNodeWithoutSemicolon(tokens []Token, pos int) (r
 	pos = potentialPos
 
 	// check for equal
-	pos, err = p.checkToken("assignment", []string{"equal", "comparator"}, pos, tokens)
+	pos, err = p.CheckToken("assignment", []string{"equal", "comparator"}, pos, tokens)
 	if err != nil {
 		return
 	} else if tokens[pos].Type == "comparator" {
@@ -814,7 +814,7 @@ func (p *Parser) parseAssignmentNode(tokens []Token, pos int) (result Assignment
 	}
 
 	// check for semicolon
-	pos, err = p.checkToken("assignment", []string{"semicolon"}, pos, tokens)
+	pos, err = p.CheckToken("assignment", []string{"semicolon"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -825,14 +825,14 @@ func (p *Parser) parseAssignmentNode(tokens []Token, pos int) (result Assignment
 
 func (p *Parser) parseTypeNode(tokens []Token, pos int) (result TypeNode, newPos int, err error) {
 	// (TYPE | DIRECTION [TYPE]) [<range>]
-	pos, err = p.checkToken("type", []string{"type", "direction"}, pos, tokens)
+	pos, err = p.CheckToken("type", []string{"type", "direction"}, pos, tokens)
 	if err != nil {
 		return
 	}
 
 	if tokens[pos].Type == "direction" {
 		// potentially take a type
-		potentialPos, e := p.checkToken("type", []string{"type"}, pos+1, tokens)
+		potentialPos, e := p.CheckToken("type", []string{"type"}, pos+1, tokens)
 		if e == nil {
 			// success!
 			result.Type = tokens[potentialPos]
@@ -879,7 +879,7 @@ func (p *Parser) parseDeclarationNode(tokens []Token, pos int) (result Declarati
 	pos = potentialPos
 
 	// see if it's an equal
-	potentialPos, e = p.checkToken("declaration", []string{"equal"}, pos, tokens)
+	potentialPos, e = p.CheckToken("declaration", []string{"equal"}, pos, tokens)
 	if e == nil {
 		// it's an equal, so there's a value
 		valueNode, potentialPos, e := p.parseExpression(tokens, potentialPos+1)
@@ -892,7 +892,7 @@ func (p *Parser) parseDeclarationNode(tokens []Token, pos int) (result Declarati
 		}
 
 		// see if there's more variables
-		potentialPos, e = p.checkToken("declaration", []string{"comma"}, pos, tokens)
+		potentialPos, e = p.CheckToken("declaration", []string{"comma"}, pos, tokens)
 		if e == nil {
 			pos = potentialPos
 			// it's a comma, so there's more variables
@@ -905,7 +905,7 @@ func (p *Parser) parseDeclarationNode(tokens []Token, pos int) (result Declarati
 				result.Variables = append(result.Variables, variableNode)
 
 				// get equal
-				pos, err = p.checkToken("declaration", []string{"equal"}, pos, tokens)
+				pos, err = p.CheckToken("declaration", []string{"equal"}, pos, tokens)
 				if err != nil {
 					return
 				}
@@ -919,13 +919,13 @@ func (p *Parser) parseDeclarationNode(tokens []Token, pos int) (result Declarati
 				result.Values = append(result.Values, valueNode)
 
 				// possibly continue
-				potentialPos, e = p.checkToken("declaration", []string{"comma"}, pos, tokens)
+				potentialPos, e = p.CheckToken("declaration", []string{"comma"}, pos, tokens)
 			}
 		}
 
 	} else {
 		// see if there's more variables
-		potentialPos, e = p.checkToken("declaration", []string{"comma"}, pos, tokens)
+		potentialPos, e = p.CheckToken("declaration", []string{"comma"}, pos, tokens)
 		if e == nil {
 			pos = potentialPos
 			// it's a comma, so there's more variables
@@ -937,13 +937,13 @@ func (p *Parser) parseDeclarationNode(tokens []Token, pos int) (result Declarati
 				}
 				result.Variables = append(result.Variables, variableNode)
 				pos = potentialPos
-				potentialPos, e = p.checkToken("declaration", []string{"comma"}, pos, tokens)
+				potentialPos, e = p.CheckToken("declaration", []string{"comma"}, pos, tokens)
 			}
 		}
 	}
 
 	// check for semicolon
-	pos, err = p.checkToken("declaration", []string{"semicolon"}, pos, tokens)
+	pos, err = p.CheckToken("declaration", []string{"semicolon"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -954,19 +954,19 @@ func (p *Parser) parseDeclarationNode(tokens []Token, pos int) (result Declarati
 
 func (p *Parser) parseBeginBlock(tokens []Token, pos int) (result BeginBlockNode, newPos int, err error) {
 	// BEGIN [ COLON <identifier> ] { <alwaysable_statement> } END
-	pos, err = p.checkToken("begin block", []string{"begin"}, pos, tokens)
+	pos, err = p.CheckToken("begin block", []string{"begin"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// optionally, get colon
-	potentialPos, e := p.checkToken("begin block", []string{"colon"}, pos, tokens)
+	potentialPos, e := p.CheckToken("begin block", []string{"colon"}, pos, tokens)
 	if e == nil {
 		pos = potentialPos + 1
 
 		// get identifier
-		pos, err = p.checkToken("begin block", []string{"identifier"}, pos, tokens)
+		pos, err = p.CheckToken("begin block", []string{"identifier"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -983,7 +983,7 @@ func (p *Parser) parseBeginBlock(tokens []Token, pos int) (result BeginBlockNode
 	pos = potentialPos
 
 	// check for end
-	pos, err = p.checkToken("begin block", []string{"end"}, pos, tokens)
+	pos, err = p.CheckToken("begin block", []string{"end"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -994,14 +994,14 @@ func (p *Parser) parseBeginBlock(tokens []Token, pos int) (result BeginBlockNode
 func (p *Parser) parseIfBlock(tokens []Token, pos int) (result IfBlockNode, newPos int, err error) {
 	// IF LPAREN <expr> RPAREN <generateable_statement> [ELSE <generateable_statement>]
 	// get if
-	pos, err = p.checkToken("if block", []string{"if"}, pos, tokens)
+	pos, err = p.CheckToken("if block", []string{"if"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// get lparen
-	pos, err = p.checkToken("if block", []string{"lparen"}, pos, tokens)
+	pos, err = p.CheckToken("if block", []string{"lparen"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1017,7 +1017,7 @@ func (p *Parser) parseIfBlock(tokens []Token, pos int) (result IfBlockNode, newP
 	pos = potentialPos
 
 	// get rparen
-	pos, err = p.checkToken("if block", []string{"rparen"}, pos, tokens)
+	pos, err = p.CheckToken("if block", []string{"rparen"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1033,7 +1033,7 @@ func (p *Parser) parseIfBlock(tokens []Token, pos int) (result IfBlockNode, newP
 	pos = potentialPos
 
 	// get else
-	potentialPos, e = p.checkToken("if block", []string{"else"}, pos, tokens)
+	potentialPos, e = p.CheckToken("if block", []string{"else"}, pos, tokens)
 	if e == nil {
 		pos = potentialPos + 1
 		// get always statement
@@ -1052,13 +1052,13 @@ func (p *Parser) parseIfBlock(tokens []Token, pos int) (result IfBlockNode, newP
 func (p *Parser) parseForBlock(tokens []Token, pos int) (result ForBlockNode, newPos int, err error) {
 	// <for> -> FOR LPAREN [<assignment_without_semicolon>] SEMICOLON [<expr>] SEMICOLON [<assignment_without_semicolon>] RPAREN <begin_block>
 	// get for
-	pos, err = p.checkToken("for block", []string{"for"}, pos, tokens)
+	pos, err = p.CheckToken("for block", []string{"for"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 	// get lparen
-	pos, err = p.checkToken("for block", []string{"lparen"}, pos, tokens)
+	pos, err = p.CheckToken("for block", []string{"lparen"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1070,7 +1070,7 @@ func (p *Parser) parseForBlock(tokens []Token, pos int) (result ForBlockNode, ne
 		pos = potentialPos
 	}
 	// get semicolon
-	pos, err = p.checkToken("for block", []string{"semicolon"}, pos, tokens)
+	pos, err = p.CheckToken("for block", []string{"semicolon"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1082,7 +1082,7 @@ func (p *Parser) parseForBlock(tokens []Token, pos int) (result ForBlockNode, ne
 		pos = potentialPos
 	}
 	// get semicolon
-	pos, err = p.checkToken("for block", []string{"semicolon"}, pos, tokens)
+	pos, err = p.CheckToken("for block", []string{"semicolon"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1095,7 +1095,7 @@ func (p *Parser) parseForBlock(tokens []Token, pos int) (result ForBlockNode, ne
 	}
 
 	// get rparen
-	pos, err = p.checkToken("for block", []string{"rparen"}, pos, tokens)
+	pos, err = p.CheckToken("for block", []string{"rparen"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1120,7 +1120,7 @@ func (p *Parser) parseCaseNode(tokens []Token, pos int) (result CaseNode, newPos
 	result.Conditions = append(result.Conditions, expr)
 
 	// get other expressions, optionally
-	potentialPos, e := p.checkToken("case", []string{"comma"}, pos, tokens)
+	potentialPos, e := p.CheckToken("case", []string{"comma"}, pos, tokens)
 	for e == nil {
 		pos = potentialPos + 1
 		// get expr
@@ -1129,11 +1129,11 @@ func (p *Parser) parseCaseNode(tokens []Token, pos int) (result CaseNode, newPos
 			return
 		}
 		result.Conditions = append(result.Conditions, expr)
-		potentialPos, e = p.checkToken("case", []string{"comma"}, pos, tokens)
+		potentialPos, e = p.CheckToken("case", []string{"comma"}, pos, tokens)
 	}
 
 	// get colon
-	pos, err = p.checkToken("case", []string{"colon"}, pos, tokens)
+	pos, err = p.CheckToken("case", []string{"colon"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1154,14 +1154,14 @@ func (p *Parser) parseCaseNode(tokens []Token, pos int) (result CaseNode, newPos
 // <case_block> -> CASE LPAREN <expr> RPAREN {<case>} [ DEFAULT COLON <alwaysable_statement> ] ENDCASE
 func (p *Parser) parseCaseBlock(tokens []Token, pos int) (result CaseBlock, newPos int, err error) {
 	// get case
-	pos, err = p.checkToken("case block", []string{"case"}, pos, tokens)
+	pos, err = p.CheckToken("case block", []string{"case"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// get lparen
-	pos, err = p.checkToken("case block", []string{"lparen"}, pos, tokens)
+	pos, err = p.CheckToken("case block", []string{"lparen"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1175,7 +1175,7 @@ func (p *Parser) parseCaseBlock(tokens []Token, pos int) (result CaseBlock, newP
 	result.Expr = expr
 
 	// get rparen
-	pos, err = p.checkToken("case block", []string{"rparen"}, pos, tokens)
+	pos, err = p.CheckToken("case block", []string{"rparen"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1190,11 +1190,11 @@ func (p *Parser) parseCaseBlock(tokens []Token, pos int) (result CaseBlock, newP
 	}
 
 	// get default, optionally
-	potentialPos, e = p.checkToken("case block", []string{"default"}, pos, tokens)
+	potentialPos, e = p.CheckToken("case block", []string{"default"}, pos, tokens)
 	if e == nil {
 		pos = potentialPos + 1
 		// get colon
-		pos, err = p.checkToken("case block", []string{"colon"}, pos, tokens)
+		pos, err = p.CheckToken("case block", []string{"colon"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -1210,7 +1210,7 @@ func (p *Parser) parseCaseBlock(tokens []Token, pos int) (result CaseBlock, newP
 	}
 
 	// get endcase
-	pos, err = p.checkToken("case block", []string{"endcase"}, pos, tokens)
+	pos, err = p.CheckToken("case block", []string{"endcase"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1281,7 +1281,7 @@ func (p *Parser) parseAlwaysStatements(tokens []Token, pos int) (result []Always
 func (p *Parser) parseGenerate(tokens []Token, pos int) (result GenerateNode, newPos int, err error) {
 	// <generate> -> GENERATE <generateable_statements> ENDGENERATE
 	// get generate
-	pos, err = p.checkToken("generate", []string{"generate"}, pos, tokens)
+	pos, err = p.CheckToken("generate", []string{"generate"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1297,7 +1297,7 @@ func (p *Parser) parseGenerate(tokens []Token, pos int) (result GenerateNode, ne
 	pos = potentialPos
 
 	// get endgenerate
-	pos, err = p.checkToken("generate", []string{"endgenerate"}, pos, tokens)
+	pos, err = p.CheckToken("generate", []string{"endgenerate"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1310,14 +1310,14 @@ func (p *Parser) parseGenerate(tokens []Token, pos int) (result GenerateNode, ne
 // <time> -> [TIME] <identifier>
 func (p *Parser) parseTime(tokens []Token, pos int) (result TimeNode, newPos int, err error) {
 	// get time, optionally
-	potentialPos, e := p.checkToken("time", []string{"time"}, pos, tokens)
+	potentialPos, e := p.CheckToken("time", []string{"time"}, pos, tokens)
 	if e == nil {
 		result.Time = &tokens[potentialPos]
 		pos = potentialPos + 1
 	}
 
 	// get identifier
-	pos, err = p.checkToken("time", []string{"identifier"}, pos, tokens)
+	pos, err = p.CheckToken("time", []string{"identifier"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1337,7 +1337,7 @@ func (p *Parser) parseEvent(tokens []Token, pos int) (result []TimeNode, newPos 
 	result = append(result, timeNode)
 
 	// get other times
-	potentialPos, e := p.checkToken("event", []string{"identifier"}, pos, tokens)
+	potentialPos, e := p.CheckToken("event", []string{"identifier"}, pos, tokens)
 	for e == nil {
 		// special case because or is technically a valid identifier
 		if tokens[potentialPos].Value != "or" {
@@ -1351,7 +1351,7 @@ func (p *Parser) parseEvent(tokens []Token, pos int) (result []TimeNode, newPos 
 			result = append(result, timeNode)
 			pos = potentialPos
 
-			potentialPos, e = p.checkToken("event", []string{"identifier"}, pos, tokens)
+			potentialPos, e = p.CheckToken("event", []string{"identifier"}, pos, tokens)
 		} else {
 			err = e
 		}
@@ -1362,14 +1362,14 @@ func (p *Parser) parseEvent(tokens []Token, pos int) (result []TimeNode, newPos 
 
 // <delay_statement> -> POUND [ LITERAL | <identifier> ]
 func (p *Parser) parseDelayStatement(tokens []Token, pos int) (result DelayNode, newPos int, err error) {
-	pos, err = p.checkToken("delay", []string{"pound"}, pos, tokens)
+	pos, err = p.CheckToken("delay", []string{"pound"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// get literal or identifier
-	pos, err = p.checkToken("delay", []string{"literal", "identifier"}, pos, tokens)
+	pos, err = p.CheckToken("delay", []string{"literal", "identifier"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1383,18 +1383,18 @@ func (p *Parser) parseAlways(tokens []Token, pos int) (result AlwaysNode, newPos
 	// <always> -> ALWAYS [ AT LPAREN <event> RPAREN ] <alwaysable_statement>
 
 	// get always
-	pos, err = p.checkToken("always", []string{"always"}, pos, tokens)
+	pos, err = p.CheckToken("always", []string{"always"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// get at, optionally
-	potentialPos, e := p.checkToken("always", []string{"at"}, pos, tokens)
+	potentialPos, e := p.CheckToken("always", []string{"at"}, pos, tokens)
 	if e == nil {
 		pos = potentialPos + 1
 		// get lparen
-		pos, err = p.checkToken("always", []string{"lparen"}, pos, tokens)
+		pos, err = p.CheckToken("always", []string{"lparen"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -1409,7 +1409,7 @@ func (p *Parser) parseAlways(tokens []Token, pos int) (result AlwaysNode, newPos
 		result.Times = event
 
 		// get rparen
-		pos, err = p.checkToken("always", []string{"rparen"}, pos, tokens)
+		pos, err = p.CheckToken("always", []string{"rparen"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -1432,14 +1432,14 @@ func (p *Parser) parseBuiltinFunctionCall(tokens []Token, pos int) (result Funct
 	// <builtin_function_call> -> DOLLAR <identifier> LPAREN <expr> { COMMA <expr> } RPAREN SEMICOLON
 
 	// get dollar
-	pos, err = p.checkToken("builtin function call", []string{"dollar"}, pos, tokens)
+	pos, err = p.CheckToken("builtin function call", []string{"dollar"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// get identifier
-	pos, err = p.checkToken("builtin function call", []string{"identifier"}, pos, tokens)
+	pos, err = p.CheckToken("builtin function call", []string{"identifier"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1447,7 +1447,7 @@ func (p *Parser) parseBuiltinFunctionCall(tokens []Token, pos int) (result Funct
 	pos++
 
 	// get lparen, optionally
-	potentialPos, e := p.checkToken("builtin function call", []string{"lparen"}, pos, tokens)
+	potentialPos, e := p.CheckToken("builtin function call", []string{"lparen"}, pos, tokens)
 	if e == nil {
 		pos = potentialPos + 1
 
@@ -1461,7 +1461,7 @@ func (p *Parser) parseBuiltinFunctionCall(tokens []Token, pos int) (result Funct
 		pos = potentialPos
 
 		// get any other expressions
-		potentialPos, e = p.checkToken("builtin function call", []string{"comma"}, pos, tokens)
+		potentialPos, e = p.CheckToken("builtin function call", []string{"comma"}, pos, tokens)
 		for e == nil {
 			// take the expr
 			expr, potentialPos, e = p.parseExpression(tokens, potentialPos+1)
@@ -1472,11 +1472,11 @@ func (p *Parser) parseBuiltinFunctionCall(tokens []Token, pos int) (result Funct
 				err = e
 				return
 			}
-			potentialPos, e = p.checkToken("builtin function call", []string{"comma"}, pos, tokens)
+			potentialPos, e = p.CheckToken("builtin function call", []string{"comma"}, pos, tokens)
 		}
 
 		// get rparen
-		pos, err = p.checkToken("builtin function call", []string{"rparen"}, pos, tokens)
+		pos, err = p.CheckToken("builtin function call", []string{"rparen"}, pos, tokens)
 		if err != nil {
 			return
 		}
@@ -1484,7 +1484,7 @@ func (p *Parser) parseBuiltinFunctionCall(tokens []Token, pos int) (result Funct
 	}
 
 	// get semicolon
-	pos, err = p.checkToken("builtin function call", []string{"semicolon"}, pos, tokens)
+	pos, err = p.CheckToken("builtin function call", []string{"semicolon"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1497,14 +1497,14 @@ func (p *Parser) parseDefParamNode(tokens []Token, pos int) (result DefParamNode
 	// <def_param> -> DEFPARAM <identifier> { DOT <identifier> } EQUAL <expr> SEMICOLON
 
 	// get defparam
-	pos, err = p.checkToken("def param", []string{"defparam"}, pos, tokens)
+	pos, err = p.CheckToken("def param", []string{"defparam"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// get identifier
-	pos, err = p.checkToken("def param", []string{"identifier"}, pos, tokens)
+	pos, err = p.CheckToken("def param", []string{"identifier"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1512,20 +1512,20 @@ func (p *Parser) parseDefParamNode(tokens []Token, pos int) (result DefParamNode
 	pos++
 
 	// get any other identifiers
-	potentialPos, e := p.checkToken("def param", []string{"dot"}, pos, tokens)
+	potentialPos, e := p.CheckToken("def param", []string{"dot"}, pos, tokens)
 	for e == nil {
 		// take the identifier
-		pos, err = p.checkToken("def param", []string{"identifier"}, potentialPos+1, tokens)
+		pos, err = p.CheckToken("def param", []string{"identifier"}, potentialPos+1, tokens)
 		if err != nil {
 			return
 		}
 		result.Identifiers = append(result.Identifiers, tokens[pos])
 		pos++
-		potentialPos, e = p.checkToken("def param", []string{"dot"}, pos, tokens)
+		potentialPos, e = p.CheckToken("def param", []string{"dot"}, pos, tokens)
 	}
 
 	// get equal
-	pos, err = p.checkToken("def param", []string{"equal"}, pos, tokens)
+	pos, err = p.CheckToken("def param", []string{"equal"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1541,7 +1541,7 @@ func (p *Parser) parseDefParamNode(tokens []Token, pos int) (result DefParamNode
 	pos = potentialPos
 
 	// get semicolon
-	pos, err = p.checkToken("def param", []string{"semicolon"}, pos, tokens)
+	pos, err = p.CheckToken("def param", []string{"semicolon"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1552,7 +1552,7 @@ func (p *Parser) parseDefParamNode(tokens []Token, pos int) (result DefParamNode
 
 func (p *Parser) parseInitial(tokens []Token, pos int) (result InitialNode, newPos int, err error) {
 	// <initial> -> INITIAL <alwaysable_statement>
-	pos, err = p.checkToken("initial", []string{"initial"}, pos, tokens)
+	pos, err = p.CheckToken("initial", []string{"initial"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1657,20 +1657,20 @@ func (p *Parser) parseModuleInterior(tokens []Token, pos int) (result []Interior
 	}
 }
 func (p *Parser) parseTask(tokens []Token, pos int) (result TaskNode, newPos int, err error) {
-	pos, err = p.checkToken("task", []string{"task"}, pos, tokens)
+	pos, err = p.CheckToken("task", []string{"task"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
-	pos, err = p.checkToken("task", []string{"identifier"}, pos, tokens)
+	pos, err = p.CheckToken("task", []string{"identifier"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	result.Identifier = tokens[pos]
 	pos++
 
-	pos, err = p.checkToken("task", []string{"semicolon"}, pos, tokens)
+	pos, err = p.CheckToken("task", []string{"semicolon"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1682,7 +1682,7 @@ func (p *Parser) parseTask(tokens []Token, pos int) (result TaskNode, newPos int
 	}
 
 	// get endtask
-	pos, err = p.checkToken("task", []string{"endtask"}, pos, tokens)
+	pos, err = p.CheckToken("task", []string{"endtask"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1700,7 +1700,7 @@ func (p *Parser) parsePorts(tokens []Token, pos int) (result []Token, newPos int
 	// ports is just the list of identifiers
 
 	// get the first identifier
-	pos, err = p.checkToken("ports", []string{"identifier"}, pos, tokens)
+	pos, err = p.CheckToken("ports", []string{"identifier"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1708,15 +1708,15 @@ func (p *Parser) parsePorts(tokens []Token, pos int) (result []Token, newPos int
 	pos++
 
 	// now take the rest
-	potentialPos, e := p.checkToken("ports", []string{"comma"}, pos, tokens)
+	potentialPos, e := p.CheckToken("ports", []string{"comma"}, pos, tokens)
 	for e == nil {
-		pos, err = p.checkToken("ports", []string{"identifier"}, potentialPos+1, tokens)
+		pos, err = p.CheckToken("ports", []string{"identifier"}, potentialPos+1, tokens)
 		if err != nil {
 			return
 		}
 		result = append(result, tokens[pos])
 		pos++
-		potentialPos, e = p.checkToken("ports", []string{"comma"}, pos, tokens)
+		potentialPos, e = p.CheckToken("ports", []string{"comma"}, pos, tokens)
 	}
 	newPos = pos
 	return
@@ -1725,7 +1725,7 @@ func (p *Parser) parsePorts(tokens []Token, pos int) (result []Token, newPos int
 // Returns a list of ports, and newPos is the position after the list
 func (p *Parser) parsePortList(tokens []Token, pos int) (result PortListNode, newPos int, err error) {
 	// take lparen
-	pos, err = p.checkToken("port list", []string{"lparen"}, pos, tokens)
+	pos, err = p.CheckToken("port list", []string{"lparen"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1740,7 +1740,7 @@ func (p *Parser) parsePortList(tokens []Token, pos int) (result PortListNode, ne
 	}
 
 	// then get the rparen
-	pos, err = p.checkToken("port list", []string{"rparen"}, pos, tokens)
+	pos, err = p.CheckToken("port list", []string{"rparen"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1752,14 +1752,14 @@ func (p *Parser) parsePortList(tokens []Token, pos int) (result PortListNode, ne
 
 func (p *Parser) parseModule(tokens []Token, pos int) (result ModuleNode, newPos int, err error) {
 	// MODULE <identifier> [<port_list>] SEMICOLON <interior> ENDMODULE [SEMICOLON]
-	pos, err = p.checkToken("module", []string{"module"}, pos, tokens)
+	pos, err = p.CheckToken("module", []string{"module"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// get the identifier
-	pos, err = p.checkToken("module", []string{"identifier"}, pos, tokens)
+	pos, err = p.CheckToken("module", []string{"identifier"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1775,7 +1775,7 @@ func (p *Parser) parseModule(tokens []Token, pos int) (result ModuleNode, newPos
 	}
 
 	// get the semicolon
-	pos, err = p.checkToken("module", []string{"semicolon"}, pos, tokens)
+	pos, err = p.CheckToken("module", []string{"semicolon"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1793,14 +1793,14 @@ func (p *Parser) parseModule(tokens []Token, pos int) (result ModuleNode, newPos
 	}
 
 	// get the endmodule
-	pos, err = p.checkToken("module", []string{"endmodule"}, pos, tokens)
+	pos, err = p.CheckToken("module", []string{"endmodule"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// get the semicolon, optionally
-	potentialPos, e = p.checkToken("module", []string{"semicolon"}, pos, tokens)
+	potentialPos, e = p.CheckToken("module", []string{"semicolon"}, pos, tokens)
 	if e == nil {
 		pos = potentialPos
 	}
@@ -1814,14 +1814,14 @@ func (p *Parser) parseModule(tokens []Token, pos int) (result ModuleNode, newPos
 // ==============================
 func (p *Parser) parseDefine(tokens []Token, pos int) (result *DefineNode, newPos int, err error) {
 	// DEFINE <identifier> ... NEWLINE
-	pos, err = p.checkToken("define", []string{"define"}, pos, tokens)
+	pos, err = p.CheckToken("define", []string{"define"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
 	// get the identifier
-	pos, err = p.checkToken("define", []string{"identifier"}, pos, tokens)
+	pos, err = p.CheckToken("define", []string{"identifier"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1837,7 +1837,7 @@ func (p *Parser) parseDefine(tokens []Token, pos int) (result *DefineNode, newPo
 }
 func (p *Parser) skipTimescale(tokens []Token, pos int) (newPos int, err error) {
 	// TIMESCALE
-	pos, err = p.checkToken("timescale", []string{"timescale"}, pos, tokens)
+	pos, err = p.CheckToken("timescale", []string{"timescale"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1854,13 +1854,13 @@ func (p *Parser) skipTimescale(tokens []Token, pos int) (newPos int, err error) 
 
 // <include> -> include <literal>
 func (p *Parser) skipInclude(tokens []Token, pos int) (newPos int, err error) {
-	pos, err = p.checkToken("include", []string{"include"}, pos, tokens)
+	pos, err = p.CheckToken("include", []string{"include"}, pos, tokens)
 	if err != nil {
 		return
 	}
 	pos++
 
-	pos, err = p.checkToken("include", []string{"literal"}, pos, tokens)
+	pos, err = p.CheckToken("include", []string{"literal"}, pos, tokens)
 	if err != nil {
 		return
 	}
@@ -1962,15 +1962,19 @@ func getInteriorStatementsFromInteriorNode(interiorNode InteriorNode) []Interior
 	}
 	return result
 }
+func GetInteriorStatementsFromModule(module ModuleNode) []InteriorNode {
+	var result []InteriorNode
+	for _, statement := range module.Interior {
+		result = append(result, getInteriorStatementsFromInteriorNode(statement)...)
+	}
+	return result
+}
 
 func GetInteriorStatements(fileNode FileNode) []InteriorNode {
 	var result []InteriorNode
 	for _, statements := range fileNode.Statements {
 		if statements.Module != nil {
-			interior := statements.Module.Interior
-			for _, statement := range interior {
-				result = append(result, getInteriorStatementsFromInteriorNode(statement)...)
-			}
+			result = append(result, GetInteriorStatementsFromModule(*statements.Module)...)
 		}
 	}
 	return result

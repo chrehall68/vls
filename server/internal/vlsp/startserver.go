@@ -32,8 +32,8 @@ func StartServer(logger *zap.Logger, reader io.ReadCloser, writer io.WriteCloser
 	}
 	logger.Sugar().Infof("initialized handler")
 
-	conn.Go(ctx, protocol.ServerHandler(
-		handler, jsonrpc2.MethodNotFoundHandler,
+	conn.Go(ctx, protocol.CancelHandler(protocol.ServerHandler(
+		handler, jsonrpc2.MethodNotFoundHandler),
 	))
 	<-conn.Done()
 }
